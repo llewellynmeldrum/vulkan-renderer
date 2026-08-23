@@ -76,3 +76,12 @@ inline constexpr void LOG_WARN(std::format_string<_Args...> a_fmt, _Args&&... a_
         std::format(a_fmt,std::forward<_Args>(a_args)...)
     );
 }
+template <class... _Args>
+inline constexpr void LOG_DBG(std::format_string<_Args...> a_fmt, _Args&&... a_args) {
+    LOG_STR(
+        style::fg_rgb(140,0,190),
+        "DBG   "sv,
+        style::fg_rgb(190,0,255),
+        std::format(a_fmt,std::forward<_Args>(a_args)...)
+    );
+}

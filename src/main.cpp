@@ -1,3 +1,4 @@
+#include <cpptrace/basic.hpp>
 #include <vulkan/vulkan.hpp>
 #include "vk_types.hpp"
 #include "range/v3/view/enumerate.hpp"
@@ -11,16 +12,19 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <cpptrace/utils.hpp>
+#include <cpptrace/formatting.hpp>
 #include <SDL3/SDL_video.h>
 #include <VkBootstrap.h>
+#include <vulkan/vulkan_raii.hpp>
 
 // Project headers
 #include "types.hpp"
+#include "vk_init_helpers.hpp"
+#include "file_io.hpp"
 #include "vk_images.hpp"
 #include "vk_swapchain.hpp"
 #include "logger.hpp"
 #include "shared.hpp"
-#include "vkinit.hpp"
 #include "timer.hpp"
 #include "vulkan/vulkan.hpp"
 //#include "vulkan/vulkan.hpp"
@@ -32,7 +36,7 @@ struct FrameData {
     vk::raii::CommandPool commandPool{nullptr};
     vk::raii::CommandBuffer commandBuffer{nullptr};
     vk::raii::Fence fence{nullptr};
-    vk::raii::Semaphore swapchainSemaphore{nullptr};
+    vk::raii::Semaphore presentCompleteSemaphore{nullptr};
 };
 
 FWD_DECL_STRUCT(SDL_Window);
@@ -60,9 +64,15 @@ struct VkEngine {
     u32 m_vkQueueFamily{};
 
 
-    Swapchain m_Swapchain{};
+    Swapchain m_swapchain{};
 
     array<FrameData, N_FSYNC> m_inflightFrames{};
+
+    vk::raii::PipelineLayout m_vkPipelineLayout{nullptr};
+    vk::raii::Pipeline m_vkPipeline{nullptr};
+
+    vk::raii::CommandPool m_commandPool{nullptr};
+    void record_commands_to_buffer(u32 imageIndex);
 
     FrameData& get_current_frame();
 
@@ -81,6 +91,10 @@ struct VkEngine {
     void init_window();
     void init_vulkan();
     void init_swapchain();
+    void init_pipeline();
+
+    [[nodiscard]] 
+    auto make_shader_module(std::span<const char> spirv_src);
     void init_commands();
     void init_sync_structures();
 
@@ -102,61 +116,36 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL vk_debug_callback(
     vk::DebugUtilsMessengerCallbackDataEXT const* data,
     void* _
 ) {
+    auto custom_formatter = cpptrace::formatter{}
+        .colors(cpptrace::formatter::color_mode::always)    // Force ANSI colors
+        .paths(cpptrace::formatter::path_mode::basename)    // Print "main.cpp" instead of full path
+        .addresses(cpptrace::formatter::address_mode::none) // Object file address instead of raw
+        .snippets(false);                                    // Include source code snippets
     using Sev = vk::DebugUtilsMessageSeverityFlagBitsEXT;
     auto const kind = vk::to_string(types);
     if (severity >= Sev::eError) {
-        LOG_ERROR("[vulkan {}] {}", kind, data->pMessage);
-    } else if (severity >= Sev::eWarning) {
-        LOG_WARN("[vulkan {}] {}", kind, data->pMessage);
-    } else {
-        LOG_INFO("[vulkan {}] {}", kind, data->pMessage);
+        std::ostringstream out{};
+        auto trace = cpptrace::generate_trace();
+        for (auto idx = 0uz; idx< trace.frames.size(); idx++){
+            auto const& frame = trace.frames.at(idx);
+            bool has_dbg_symbols = frame.line.has_value();
+            if (has_dbg_symbols){
+                out << custom_formatter.format(frame) << "\n";
+            }else{
+                auto omitted_streak = 0uz;
+                while (idx < trace.frames.size() && !trace.frames.at(idx).line.has_value()){
+                    omitted_streak++;
+                    idx++;
+                }
+                out << std::format("Omitted {} frames (no dbg_symbols)\n",omitted_streak);
+            }
+        }
+        std::cerr << out.str();
+        LIBASSERT_BREAKPOINT();
     }
-    ASSERT(false);
     return vk::False;
 }
 
-bool supports_extension(std::span<vk::ExtensionProperties const> haystack, std::string_view needle) {
-    return std::ranges::any_of(
-        haystack, 
-        [needle](auto const& ext) {
-            return std::string_view{ext.extensionName} == needle;
-        }
-    );
-}
-template<typename Pred>
-auto get_pd_queue_family(vk::raii::PhysicalDevice physical_device, Pred&& pred) -> std::optional<std::size_t>{
-    auto families = physical_device.getQueueFamilyProperties();
-    for (auto const& [idx, family] : ranges::views::enumerate(families)){
-        if (!(family.queueFlags & vk::QueueFlagBits::eGraphics)){
-            continue;
-        }
-        if (std::invoke(std::forward<Pred>(pred),idx)){
-            return idx;
-        }
-    }
-    return std::nullopt;
-}
-constexpr auto pd_has_required_features(vk::raii::PhysicalDevice const& pd) {
-
-    auto const features = pd.getFeatures2<
-        vk::PhysicalDeviceFeatures2,
-        vk::PhysicalDeviceVulkan12Features,
-        vk::PhysicalDeviceVulkan13Features
-    >();
-
-    auto const& f12 = features.get<vk::PhysicalDeviceVulkan12Features>();
-    auto const& f13 = features.get<vk::PhysicalDeviceVulkan13Features>();
-
-    bool f12_compliant = 
-        f12.descriptorIndexing 
-        && f12.bufferDeviceAddress;
-
-    bool f13_compliant = 
-        f13.synchronization2 
-        && f13.dynamicRendering;
-
-    return f12_compliant && f13_compliant;
-};
 void VkEngine::init_vulkan() try {
     static constexpr auto API_VER = vk::ApiVersion13;
     constexpr auto EXT_MOLTENVK_FIX = "VK_KHR_portability_subset";
@@ -257,6 +246,7 @@ void VkEngine::init_vulkan() try {
         if (!supports_extension(supported_extensions,vk::KHRSwapchainExtensionName)){
             continue;
         }
+        device_extensions.push_back(vk::KHRSwapchainExtensionName); 
 
         auto family = get_pd_queue_family(
             physical_device, 
@@ -266,13 +256,35 @@ void VkEngine::init_vulkan() try {
         );
         if (!family) continue; // no matching queue family on the device
         
-        if (!pd_has_required_features(physical_device)) continue;
 
-        device_extensions.push_back(vk::KHRSwapchainExtensionName); 
-
+        // 'VK_KHR_portability_subset must be enabled if physical device supports it.'
         if (supports_extension(supported_extensions,EXT_MOLTENVK_FIX)){
             device_extensions.push_back(EXT_MOLTENVK_FIX);
         }
+        auto queue_prio = 1.0f;
+        auto queue_info = vk::DeviceQueueCreateInfo{
+            .queueFamilyIndex = m_vkQueueFamily,
+            .queueCount = 1,
+        };
+        queue_info.setQueuePriorities(queue_prio);
+
+        
+        auto enabled_features = required_pd_feature_list();
+        try {
+            auto deviceCreateInfo= vk::DeviceCreateInfo{
+                .pNext = &enabled_features.get<vk::PhysicalDeviceFeatures2>(),
+            };
+            deviceCreateInfo.setQueueCreateInfos(queue_info);
+            deviceCreateInfo.setPEnabledExtensionNames(device_extensions);
+            m_vkDevice = vk::raii::Device{
+                physical_device,
+                deviceCreateInfo,
+            };
+        } catch (vk::FeatureNotPresentError e){
+            LOG_FATAL("PD {} is missing a feature: {}",get_pd_name(physical_device),e.what());
+            continue;
+        }
+
         m_vkPhysicalDevice = std::move(physical_device);
         m_vkQueueFamily = *family;
         break;
@@ -281,48 +293,144 @@ void VkEngine::init_vulkan() try {
         LOG_FATAL("Unable to select a physical device! Driver listed {}, none matched",//
                   m_vkInstance.enumeratePhysicalDevices().size());
     }else{
-        LOG_INFO("SELECTED GPU: {}",std::string_view{m_vkPhysicalDevice.getProperties().deviceName});
+        LOG_INFO("SELECTED GPU: {}",get_pd_name(m_vkPhysicalDevice));
     }
 
-    auto queue_prio = 1.0f;
-    auto queue_info = vk::DeviceQueueCreateInfo{
-        .queueFamilyIndex = m_vkQueueFamily,
-        .queueCount = 1,
-        .pQueuePriorities = &queue_prio,
-    };
-
-    auto const required_features_12 = vk::PhysicalDeviceVulkan12Features{
-        .descriptorIndexing = vk::True,
-        .bufferDeviceAddress = vk::True,
-    };
-    auto const required_features_13 = vk::PhysicalDeviceVulkan13Features{
-        .synchronization2 = vk::True,
-        .dynamicRendering = vk::True,
-    };
-
-    auto enabled_features = vk::StructureChain{
-        vk::PhysicalDeviceFeatures2{},
-        required_features_12,
-        required_features_13,
-    };
-    m_vkDevice = vk::raii::Device{
-        m_vkPhysicalDevice,
-        vk::DeviceCreateInfo{
-            .pNext = &enabled_features.get<vk::PhysicalDeviceFeatures2>(),
-            .queueCreateInfoCount = 1,
-            .pQueueCreateInfos = &queue_info,
-            .enabledExtensionCount = static_cast<u32>(device_extensions.size()),
-            .ppEnabledExtensionNames = device_extensions.data(),
-        },
-    };
     m_vkQueue = m_vkDevice.getQueue(m_vkQueueFamily, 0);
 } catch(vk::SystemError const& e){
     LOG_FATAL("Failed to initialize vulkan: {}", e.what());
 }
 
 
+[[nodiscard]] auto VkEngine::make_shader_module(std::span<const char> spirv_src){
+    ASSERT(spirv_src.size() == spirv_src.size_bytes());
+    return vk::raii::ShaderModule{
+        m_vkDevice,
+        vk::ShaderModuleCreateInfo{
+            .codeSize = spirv_src.size(),
+            .pCode = reinterpret_cast<u32 const*>(spirv_src.data()),
+        },
+    };
+}
+void VkEngine::init_pipeline() {
+    auto shader_src = read_file_contents("shaders/slang.spv");
+    auto shader_module = make_shader_module(shader_src);
+
+    auto vtxStageInfo = vk::PipelineShaderStageCreateInfo{
+        .stage = vk::ShaderStageFlagBits::eVertex,
+        .module = shader_module,
+        .pName = "vertMain",
+    };
+    auto fragStageInfo = vk::PipelineShaderStageCreateInfo{
+        .stage = vk::ShaderStageFlagBits::eFragment,
+        .module = shader_module,
+        .pName = "fragMain",
+    };
+    std::array shaderStages{
+        vtxStageInfo,
+        fragStageInfo,
+    };
+    static constexpr std::array dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+    auto dynamicState = vk::PipelineDynamicStateCreateInfo{ };
+    dynamicState.setDynamicStates(dynamicStates);
+
+    auto const vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
+
+
+    auto const iaState=  vk::PipelineInputAssemblyStateCreateInfo{
+        .topology = vk::PrimitiveTopology::eTriangleList,
+    };
+
+    auto viewport = vk::Viewport{
+        0.0f,0.0f,
+        st_cast<f32>(m_swapchain.extent.width),
+        st_cast<f32>(m_swapchain.extent.height),
+        0.0f,1.0f,
+    };
+    auto scissor_region = vk::Rect2D{
+        vk::Offset2D{},
+        m_swapchain.extent,
+    };
+
+    auto viewportState = vk::PipelineViewportStateCreateInfo{
+        .viewportCount = 1,
+        .scissorCount = 1,
+        // In this instance, since these are both dynamic state, we dont actually set the pointers to them
+
+    };
+    auto rasterizationState = vk::PipelineRasterizationStateCreateInfo{
+        .depthClampEnable        = vk::False,
+        .rasterizerDiscardEnable = vk::False,
+        .polygonMode             = vk::PolygonMode::eFill,
+        .cullMode                = vk::CullModeFlagBits::eBack,
+        .frontFace               = vk::FrontFace::eClockwise,
+        .depthBiasEnable         = vk::False,
+        .lineWidth               = 1.0f
+    };
+    auto multisamplingState = vk::PipelineMultisampleStateCreateInfo{
+        .rasterizationSamples = vk::SampleCountFlagBits::e1,
+        .sampleShadingEnable = vk::False,
+    };
+
+    // regular alpha blending
+    auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{
+        .blendEnable = vk::False,
+        .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha, 
+        .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+
+        .colorBlendOp        = vk::BlendOp::eAdd,
+
+        .srcAlphaBlendFactor = vk::BlendFactor::eOne, .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+        .alphaBlendOp        = vk::BlendOp::eAdd,
+
+        .colorWriteMask = vk::ColorComponentFlagBits::eR 
+            | vk::ColorComponentFlagBits::eG
+            | vk::ColorComponentFlagBits::eB
+            | vk::ColorComponentFlagBits::eA
+    };
+    auto colorBlendState = vk::PipelineColorBlendStateCreateInfo{
+        .logicOpEnable = false,
+        .logicOp = vk::LogicOp::eCopy,
+    };
+    colorBlendState.setAttachments(colorBlendAttachment);
+
+    m_vkPipelineLayout = vk::raii::PipelineLayout{
+        m_vkDevice,
+        vk::PipelineLayoutCreateInfo{
+            .setLayoutCount = 0,
+            .pushConstantRangeCount = 0,
+        },
+    };
+
+    auto pipelineCreateInfoChain =  vk::StructureChain{
+        vk::GraphicsPipelineCreateInfo{
+            .stageCount = shaderStages.size(),
+            .pStages = shaderStages.data(),
+            .pVertexInputState = &vertexInputState,
+            .pInputAssemblyState = &iaState,
+            .pViewportState = &viewportState,
+            .pRasterizationState = &rasterizationState,
+            .pMultisampleState = &multisamplingState,
+            .pColorBlendState = &colorBlendState,
+            .pDynamicState = &dynamicState,
+            .layout = m_vkPipelineLayout,
+            .renderPass = nullptr,
+        },
+        vk::PipelineRenderingCreateInfo{
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &m_swapchain.imageFormat, 
+        },
+    };
+    m_vkPipeline = vk::raii::Pipeline(
+        m_vkDevice,
+        nullptr,
+        pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>()
+    );
+
+
+}
 void VkEngine::init_swapchain() {
-    m_Swapchain = make_swapchain(
+    m_swapchain = make_swapchain(
         SwapchainSettings{
             .physical_device = m_vkPhysicalDevice,
             .device = m_vkDevice,
@@ -347,7 +455,9 @@ void VkEngine::init_commands() {
         auto buffers = m_vkDevice.allocateCommandBuffers(
             vk::CommandBufferAllocateInfo{
                 .commandPool = *frame.commandPool,
-                .level = vk::CommandBufferLevel::ePrimary,
+                // Primary can be submitted to a queue for execution,
+                // whilst secondary can be called from primary cmd buffers
+                .level = vk::CommandBufferLevel::ePrimary, 
                 .commandBufferCount = 1,
             }
         );
@@ -368,7 +478,7 @@ void VkEngine::init_sync_structures() {
             },
         };
 
-        frame.swapchainSemaphore = vk::raii::Semaphore{
+        frame.presentCompleteSemaphore = vk::raii::Semaphore{
             m_vkDevice,
             vk::SemaphoreCreateInfo{}
         };
@@ -382,49 +492,25 @@ void VkEngine::init() {
     init_window();
     init_vulkan();
     init_swapchain();
+    init_pipeline();
     init_commands();
     init_sync_structures();
 }
-template <typename T>
-    requires std::floating_point<T> || std::integral<T>
-u64 stons(T sec) {
-    return static_cast<u64>(sec * 1'000'000'000);
-}
-void VkEngine::draw() {
-    auto& frame = get_current_frame();
-    auto fenceWaitRV = m_vkDevice.waitForFences(*frame.fence, vk::True, stons(1));
-    if (fenceWaitRV != vk::Result::eSuccess){
-        LOG_FATAL("Failed to wait for fence");
-    }
-    u32 imageIndex{};
-    try{
-        auto [res, idx] = m_Swapchain.descriptor.acquireNextImage(stons(1),*frame.swapchainSemaphore);
-        imageIndex = idx;
-        if (res == vk::Result::eSuboptimalKHR){
-            LOG_WARN("Suboptimal swapchain acquire (wtv the fuck that means)");
-        }
-    } catch(vk::OutOfDateKHRError const&){
-        // recreate swapchain
-        PANIC("Unimplemented");
-    }
-    m_vkDevice.resetFences(*frame.fence);
+void VkEngine::record_commands_to_buffer(u32 imageIndex){
+    auto& cmdBuf = get_current_frame().commandBuffer;
+    cmdBuf.begin({});
+    auto const swapchainImage = m_swapchain.images.at(imageIndex);
 
-    auto & cmdBuf = frame.commandBuffer;
-
-    cmdBuf.reset();
-
-    cmdBuf.begin(
-        vk::CommandBufferBeginInfo{
-            .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-        }
+    vk_util::transition_image_layout(
+        cmdBuf, swapchainImage, 
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+        {},
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,  
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput
     );
-    auto const swapchainImage = m_Swapchain.images.at(imageIndex);
 
-    vk_util::transition_image(cmdBuf, swapchainImage, 
-                              vk::ImageLayout::eUndefined,
-                              vk::ImageLayout::eGeneral);
-
-    auto const clearColor = vk::ClearColorValue{.float32 = {{
+    auto clearColor = vk::ClearColorValue{.float32 = {{
         std::abs(std::sin(m_frameCount / 120.0f)),
         0.0f,
         std::abs(std::sin(m_frameCount / 120.0f)),
@@ -432,29 +518,92 @@ void VkEngine::draw() {
         }}
     };
 
-    cmdBuf.clearColorImage(
-            swapchainImage, 
-            vk::ImageLayout::eGeneral,
-            clearColor,
-            vk_util::image_subresource_range(vk::ImageAspectFlagBits::eColor)
-        );
+    auto attachmentInfo = vk::RenderingAttachmentInfo {
+        .imageView = m_swapchain.imageViews.at(imageIndex),
+        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .clearValue = {clearColor},
+    };
+    auto renderingInfo = vk::RenderingInfo{
+        .renderArea{.offset={},.extent=m_swapchain.extent},
+        .layerCount = 1,
+    };
+    renderingInfo.setColorAttachments(attachmentInfo);
 
-    vk_util::transition_image(cmdBuf, swapchainImage, 
-                              vk::ImageLayout::eGeneral,
-                                vk::ImageLayout::ePresentSrcKHR);
+    cmdBuf.beginRendering(renderingInfo);
+    cmdBuf.bindPipeline(
+        vk::PipelineBindPoint::eGraphics,
+        *m_vkPipeline
+    );
+    // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
+    cmdBuf.setViewport(
+        0, 
+        vk::Viewport{
+            0.0f,0.0f, // viewport position
+            st_cast<f32>(m_swapchain.extent.width), st_cast<f32>(m_swapchain.extent.height),
+            0.0f, 1.0f // min and max depth
+        }
+    );
+    cmdBuf.setScissor(
+        0,
+        vk::Rect2D{
+            vk::Offset2D{0,0},
+            m_swapchain.extent
+        }
+    );
+    u32 vertexCount{3};
+    u32 instanceCount{1};
+    u32 firstVertex{0};
+    u32 firstInstance{0};
+    cmdBuf.draw(vertexCount, instanceCount, firstVertex, firstInstance);
+    cmdBuf.endRendering();
+    vk_util::transition_image_layout(
+        cmdBuf, swapchainImage, 
+        vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        {}, // must be eNone for ePresentSrcKHR
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,/* src stage mask*/
+        vk::PipelineStageFlagBits2::eBottomOfPipe
+    );
+
     cmdBuf.end();
+}
+
+void VkEngine::draw() {
+    auto& frame = get_current_frame();
+    // 1. wait for previous frame to signal the fence
+    auto fenceRV = m_vkDevice.waitForFences(*frame.fence, vk::True, numeric_max<u64>);
+    if (fenceRV != vk::Result::eSuccess){
+        LOG_FATAL("Failed to wait for fence");
+    }
+    m_vkDevice.resetFences(*frame.fence);
+
+    // 2. Acquire the next image from the swapchain
+    auto [res, imageIndex] = m_swapchain.descriptor.acquireNextImage(
+        numeric_max<u64>,
+        *frame.presentCompleteSemaphore
+    );
+    if (res == vk::Result::eSuboptimalKHR){
+        LOG_WARN("Suboptimal swapchain acquire (wtv the fuck that means)");
+    }
+
+    auto & cmdBuf = frame.commandBuffer;
+    cmdBuf.reset();
+    record_commands_to_buffer(imageIndex);
 
     auto const cmdInfo = vk::CommandBufferSubmitInfo{
         .commandBuffer = *cmdBuf,
     };
     auto const waitInfo = vk::SemaphoreSubmitInfo{
-        .semaphore = *frame.swapchainSemaphore,
+        // Submission will wait until presentation of the previous frame is complete
+        .semaphore = *frame.presentCompleteSemaphore,
         .value = 1,
         .stageMask = vk::PipelineStageFlagBits2::eAllCommands,
     };
 
     auto const signalInfo = vk::SemaphoreSubmitInfo{
-        .semaphore = *m_Swapchain.renderSemaphores[imageIndex],
+        .semaphore = *m_swapchain.renderSemaphores[imageIndex],
         .value = 1,
         .stageMask = vk::PipelineStageFlagBits2::eAllCommands,
     };
@@ -470,9 +619,9 @@ void VkEngine::draw() {
         auto const res = m_vkQueue.presentKHR(
             vk::PresentInfoKHR{
                 .waitSemaphoreCount = 1,
-                .pWaitSemaphores = &*m_Swapchain.renderSemaphores[imageIndex],
+                .pWaitSemaphores = &*m_swapchain.renderSemaphores[imageIndex],
                 .swapchainCount = 1,
-                .pSwapchains = &*m_Swapchain.descriptor,
+                .pSwapchains = &*m_swapchain.descriptor,
                 .pImageIndices = &imageIndex,
             }
         );
@@ -517,11 +666,13 @@ void VkEngine::cleanup() {
     if (is_initialized()) {
         m_vkDevice.waitIdle();
 
-        m_Swapchain = Swapchain{};
+        m_swapchain = Swapchain{};
         for (auto& frame: m_inflightFrames){
             frame = FrameData{};
         }
         m_vkQueue.clear();
+        m_vkPipelineLayout.clear();
+        m_vkPipeline.clear();
         m_vkDevice.clear();
         m_vkPhysicalDevice.clear();
         m_vkSurface.clear();

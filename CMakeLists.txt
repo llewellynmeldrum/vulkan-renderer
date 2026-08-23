@@ -51,7 +51,10 @@ target_include_directories(vulkan_test0 PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/vk_bootstrap/src"
 )
 
-target_compile_definitions(vulkan_test0 PUBLIC VULKAN_HPP_NO_CONSTRUCTORS)
+target_compile_definitions(vulkan_test0
+    PUBLIC VULKAN_HPP_NO_CONSTRUCTORS
+    PUBLIC VULKAN_HPP_USE_REFLECT
+)
 set_target_properties( vulkan_test0 PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"
 )
@@ -149,7 +152,34 @@ if(MC_ENABLE_UBSAN)
     target_link_options(vulkan_test0 PRIVATE -fsanitize=undefined -fno-omit-frame-pointer -g)
 endif()
 
+set(SLANGC_EXECUTABLE
+    "/usr/local/bin/slangc"
+)
+set(SHADER_SLANG_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/main.slang"
+)
 # helper targets
+function (add_slang_shader_target TARGET)
+    cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
+    set (SHADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/shaders)
+    set (ENTRY_POINTS -entry vertMain -entry fragMain)
+    add_custom_command (
+          OUTPUT ${SHADERS_DIR}
+          COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
+  )
+    add_custom_command (
+          OUTPUT  ${SHADERS_DIR}/slang.spv
+          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
+          WORKING_DIRECTORY ${SHADERS_DIR}
+          DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
+          COMMENT "Compiling Slang Shaders"
+          VERBATIM
+  )
+    add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
+endfunction()
+
+add_slang_shader_target(shaders SOURCES ${SHADER_SLANG_SOURCES})
+add_dependencies(vulkan_test0 shaders)
 
 add_custom_target(run
     COMMAND sh -c "./bin/vulkan_test0"

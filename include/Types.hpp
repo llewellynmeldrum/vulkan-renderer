@@ -7,6 +7,10 @@
 // NOTE: I know this is considered bad practice, and I probably wont do it for the ""s operators, but i think ""sv is unique enough that it shouldnt matter.
 // I just really dislike c strings.
 using namespace std::string_view_literals;
+
+#define st_cast static_cast
+
+
 using u64 = uint64_t;
 using u32 = uint32_t;
 using u16 = uint16_t;

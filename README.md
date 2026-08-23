@@ -14,3 +14,7 @@ In order to update my minecraft clone to vulkan, im going to take some time to l
 
 ## vkguide chapter progress:
 - [X] chapter 1 ([8b6a13](https://github.com/llewellynmeldrum/vkguide-follow-along/commit/c01598bb0b15dc9d3b2fbc5d85b50c3fc18b6a13))
+- [X] chapter 2 ([92a4d0](https://github.com/llewellynmeldrum/vkguide-follow-along/commit/ddb8b6b257b15fce535af95938cc9d54c492a4d0)) 
+
+Switched over to the vulkan spec tutorial [docs.vulkan.org/tutorial](https://docs.vulkan.org/tutorial/latest/)
+

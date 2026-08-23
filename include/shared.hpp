@@ -3,5 +3,12 @@
 //void draw_ui();
 //void render_ui(PlatformContext const& ctx);
 //
+#include "types.hpp"
 #define FWD_DECL_STRUCT(name) struct name
 #define FWD_DECL_UNION(name) union name
+
+template <typename T>
+    requires std::floating_point<T> || std::integral<T>
+u64 stons(T sec) {
+    return static_cast<u64>(sec * 1'000'000'000);
+}

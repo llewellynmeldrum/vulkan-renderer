@@ -48,6 +48,9 @@ Swapchain make_swapchain(SwapchainSettings const& s) {
     if (caps.maxImageCount > 0) { // 0 means "no upper bound" apparently
         image_count = std::min(image_count, caps.maxImageCount);
     }
+    LOG_DBG("caps.maxImageCount:{}",caps.maxImageCount);
+    LOG_DBG("caps.minImageCount:{}",caps.minImageCount);
+    LOG_DBG("image_count:{}",image_count);
     // next is checking usage flags
     if ((caps.supportedUsageFlags & s.image_usage_flags) != s.image_usage_flags){
         LOG_FATAL("Surface does not support desired image usage {} (supports {})",
