@@ -39,10 +39,10 @@ Swapchain Swapchain::make(SwapchainSettings const& s) {
     }
 
     auto caps = s.physical_device.getSurfaceCapabilitiesKHR(s.surface);
-    auto capable_extent = caps.currentExtent;
     auto extent = s.extent_px;
-    if (capable_extent.width == UNDEFINED_EXTENT){
-        // clamp the extent to the capabilities
+    bool surface_has_fixed_extents = caps.currentExtent.width != UNDEFINED_EXTENT;
+    if (!surface_has_fixed_extents){
+        extent=s.extent_px;
         auto const max = caps.maxImageExtent;
         auto const min = caps.minImageExtent;
         extent.width = std::clamp(extent.width, min.width, max.width);
@@ -69,7 +69,7 @@ Swapchain Swapchain::make(SwapchainSettings const& s) {
                 .minImageCount = image_count,
                 .imageFormat = image_fmt.format,
                 .imageColorSpace = image_fmt.colorSpace,
-                .imageExtent = capable_extent,
+                .imageExtent = extent,
                 .imageArrayLayers = 1,
                 .imageUsage = s.image_usage_flags,
                 .imageSharingMode = vk::SharingMode::eExclusive,

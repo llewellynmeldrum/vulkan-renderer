@@ -490,7 +490,6 @@ void VkEngine::draw() {
     }
 
     // 2. Acquire the next image from the swapchain
-    // BUG: We are reaching here, with the presentComplete semaphore ALREADY SIGNALLED.
     auto [acquire_res, imageIndex] = m_swapchain.descriptor.acquireNextImage(
         numeric_max<u64>,
         *frame.presentCompleteSemaphore
@@ -536,6 +535,7 @@ void VkEngine::draw() {
     );
     if (   present_res == vk::Result::eSuboptimalKHR 
         || present_res == vk::Result::eErrorOutOfDateKHR
+        || acquire_res == vk::Result::eSuboptimalKHR // since we ignore this in the previous check
         || m_framebufferResized
     ){
         m_framebufferResized = false;
