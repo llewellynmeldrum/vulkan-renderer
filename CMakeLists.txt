@@ -53,7 +53,7 @@ target_include_directories(vulkan_test0 PRIVATE
 
 target_compile_definitions(vulkan_test0
     PUBLIC VULKAN_HPP_NO_CONSTRUCTORS
-    PUBLIC VULKAN_HPP_USE_REFLECT
+    PUBLIC VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
 )
 set_target_properties( vulkan_test0 PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"

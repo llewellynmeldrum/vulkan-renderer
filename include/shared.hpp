@@ -7,6 +7,13 @@
 #define FWD_DECL_STRUCT(name) struct name
 #define FWD_DECL_UNION(name) union name
 
+#define assert_same_type(T, U)\
+static_assert(std::same_as<T,U>,"type `" #T "` differs from type `" #U "`.")
+
+#define assert_aggregate(T)\
+static_assert(std::is_aggregate_v<T>,"\n-> type `" #T "` is not an aggregate type.`")
+
+
 template <typename T>
     requires std::floating_point<T> || std::integral<T>
 u64 stons(T sec) {

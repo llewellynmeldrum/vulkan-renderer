@@ -7,14 +7,17 @@
 #include "types.hpp"
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
+
 static constexpr auto UNDEFINED_EXTENT {numeric_max<u32>};
-Swapchain make_swapchain(SwapchainSettings const& s) {
+
+Swapchain Swapchain::make(SwapchainSettings const& s) {
     auto fmts = s.physical_device.getSurfaceFormatsKHR(s.surface);
     ASSERT(fmts.size() > 0);
 
     auto preferred = vk::SurfaceFormatKHR{s.format,s.colorSpace};
     auto surface_supports_fmt = std::ranges::contains(fmts, preferred) ;
-    auto image_fmt = surface_supports_fmt
+    auto image_fmt = 
+        surface_supports_fmt
         ? *(std::ranges::find(fmts,preferred))
         : fmts.front();
     if (!surface_supports_fmt){
@@ -36,8 +39,9 @@ Swapchain make_swapchain(SwapchainSettings const& s) {
     }
 
     auto caps = s.physical_device.getSurfaceCapabilitiesKHR(s.surface);
-    auto extent = caps.currentExtent;
-    if (extent.width == UNDEFINED_EXTENT){
+    auto capable_extent = caps.currentExtent;
+    auto extent = s.extent_px;
+    if (capable_extent.width == UNDEFINED_EXTENT){
         // clamp the extent to the capabilities
         auto const max = caps.maxImageExtent;
         auto const min = caps.minImageExtent;
@@ -65,7 +69,7 @@ Swapchain make_swapchain(SwapchainSettings const& s) {
                 .minImageCount = image_count,
                 .imageFormat = image_fmt.format,
                 .imageColorSpace = image_fmt.colorSpace,
-                .imageExtent = extent,
+                .imageExtent = capable_extent,
                 .imageArrayLayers = 1,
                 .imageUsage = s.image_usage_flags,
                 .imageSharingMode = vk::SharingMode::eExclusive,
@@ -78,8 +82,7 @@ Swapchain make_swapchain(SwapchainSettings const& s) {
         .imageFormat = image_fmt.format,
         .extent = extent,
     };
-//////////////////VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR
-//    vk::ImageUsageFlagBits2KHR::eTransferDst;
+
     swapchain.images = swapchain.descriptor.getImages();
     ASSERT(swapchain.images.size() > 0);
 
@@ -98,30 +101,10 @@ Swapchain make_swapchain(SwapchainSettings const& s) {
                 },
             }
         );
-        swapchain.renderSemaphores.emplace_back(
+        swapchain.renderFinishedSemaphores.emplace_back(
             s.device,
             vk::SemaphoreCreateInfo{}
         );
     }
     return swapchain;
 };
-//    auto vkb_swapchain =
-//        vkb::SwapchainBuilder{s.physical_device, s.device, s.surface}
-//            .set_desired_format({
-//                .format = s.format,
-//                .colorSpace = s.colorSpace,
-//            })
-//            .set_desired_present_mode(s.present_mode)
-//            .set_desired_extent(s.extents.width, s.extents.height)
-//            .add_image_usage_flags(s.image_usage_flags)
-//            .build()
-//            .value();
-//    if (!vkb_swapchain)
-//        LOG_FATAL("Failed to build swapchain.");
-//
-//    descriptor = vkb_swapchain.swapchain;
-//    imageFormat = vkb_swapchain.image_format;
-//    images = vkb_swapchain.get_images().value();
-//    imageViews = vkb_swapchain.get_image_views().value();
-//    extent = vkb_swapchain.extent;
-//    ASSERT(images.size() > 0);

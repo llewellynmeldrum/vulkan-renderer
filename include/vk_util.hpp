@@ -3,8 +3,7 @@
 #include "vk_types.hpp"
 #include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan_core.h>
-namespace vk_util {inline constexpr auto image_subresource_range(vk::ImageAspectFlags aspect) {
-}
+namespace vk_util {
 inline void transition_image_layout(
     vk::raii::CommandBuffer const& cmd, 
     vk::Image img, 
