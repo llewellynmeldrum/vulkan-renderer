@@ -4,20 +4,22 @@
 #include <SDL3/SDL.h>
 #include <thread>
 
-#include "vk_engine.hpp"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_oldnames.h"
 #include "SDL3/SDL_stdinc.h"
 #include "SDL3/SDL_video.h"
-#include "VkBootstrap.h"
+
 #include "file_io.hpp"
-#include "vk_debug.hpp"
 #include "shared.hpp"
+#include "vertex.hpp"
+#include "vk_engine.hpp"
+#include "vertex_raw_data.hpp"
+#include "vk_debug.hpp"
 #include "vk_util.hpp"
 #include "vk_init_helpers.hpp"
-#include "vulkan/vulkan.hpp"
 
 static char const* APP_NAME = "Test Window";
+
 
 void VkEngine::recreate_swapchain() {
     using namespace std::chrono_literals;
@@ -69,11 +71,22 @@ void VkEngine::init_swapchain() {
     );
     int idx = 0;
     for (const auto& rend_sem: m_swapchain.renderFinishedSemaphores){
-        setObjectName(rend_sem, std::format("({}) render sem", idx));
+        set_vkobject_dbg_name(rend_sem, std::format("({}) render sem", idx));
         idx++;
     }
 }
 
+void VkEngine::init_vtx_data() {
+    static constexpr auto n_bytes = 3 * sizeof(Vertex);
+    auto&& [buf, mem] = make_vertex_buffer(n_bytes, vk::SharingMode::eExclusive);
+    vertexBuffer = std::move(buf);
+    vertexBufferMemory = std::move(mem);
+    void *data = vertexBufferMemory.mapMemory(0,n_bytes);
+    auto const& src = std::span{vtx_raw_data::ndc_triangle_verts};
+    memcpy(data, src.data(), src.size_bytes());
+    vertexBufferMemory.unmapMemory();
+
+}
 void VkEngine::init_vulkan() try {
     static constexpr auto API_VER = vk::ApiVersion13;
     constexpr auto EXT_MOLTENVK_FIX = "VK_KHR_portability_subset";
@@ -262,7 +275,11 @@ void VkEngine::init_pipeline() {
     auto dynamicState = vk::PipelineDynamicStateCreateInfo{ };
     dynamicState.setDynamicStates(dynamicStates);
 
-    auto const vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
+    auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
+    auto binding_desc = Vertex::binding_description();
+    auto attr_desc = Vertex::attribute_descriptions();
+    vertexInputState.setVertexBindingDescriptions(binding_desc);
+    vertexInputState.setVertexAttributeDescriptions(attr_desc);
 
 
     auto const iaState=  vk::PipelineInputAssemblyStateCreateInfo{
@@ -385,13 +402,13 @@ void VkEngine::init_sync_structures() {
                 .flags = vk::FenceCreateFlagBits::eSignaled,
             },
         };
-        setObjectName(frame.fence, std::format("(Frame {}) fence", frame_idx));
+        set_vkobject_dbg_name(frame.fence, std::format("(Frame {}) fence", frame_idx));
 
         frame.presentCompleteSemaphore = vk::raii::Semaphore{
             m_vkDevice,
             vk::SemaphoreCreateInfo{ }
         };
-        setObjectName(frame.presentCompleteSemaphore, std::format("(Frame {}) present-complete sem", frame_idx));
+        set_vkobject_dbg_name(frame.presentCompleteSemaphore, std::format("(Frame {}) present-complete sem", frame_idx));
         frame_idx++;
     }
 }
@@ -406,6 +423,7 @@ void VkEngine::init() {
     init_pipeline();
     init_commands();
     init_sync_structures();
+    init_vtx_data();
 }
 void VkEngine::record_commands_to_buffer(u32 imageIndex){
     auto& cmdBuf = get_current_frame().commandBuffer;
@@ -447,6 +465,7 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
         vk::PipelineBindPoint::eGraphics,
         *m_vkPipeline
     );
+    cmdBuf.bindVertexBuffers(0, *vertexBuffer, {0});
     // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
     cmdBuf.setViewport(
         0, 
@@ -463,11 +482,7 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
             m_swapchain.extent
         }
     );
-    u32 vertexCount{3};
-    u32 instanceCount{1};
-    u32 firstVertex{0};
-    u32 firstInstance{0};
-    cmdBuf.draw(vertexCount, instanceCount, firstVertex, firstInstance);
+    cmdBuf.draw(st_cast<u32>(n_vertices),1,0,0);
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
         cmdBuf, swapchainImage, 
