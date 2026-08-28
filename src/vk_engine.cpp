@@ -3,6 +3,7 @@
 #include <SDL3/SDL_vulkan.h>
 #include <SDL3/SDL.h>
 #include <thread>
+#include <vulkan/vulkan_raii.hpp>
 
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_oldnames.h"
@@ -17,6 +18,7 @@
 #include "vk_debug.hpp"
 #include "vk_util.hpp"
 #include "vk_init_helpers.hpp"
+#include "vulkan/vulkan.hpp"
 
 static char const* APP_NAME = "Test Window";
 
@@ -76,15 +78,39 @@ void VkEngine::init_swapchain() {
     }
 }
 
-void VkEngine::init_vtx_data() {
-    static constexpr auto n_bytes = 3 * sizeof(Vertex);
-    auto&& [buf, mem] = make_vertex_buffer(n_bytes, vk::SharingMode::eExclusive);
-    vertexBuffer = std::move(buf);
-    vertexBufferMemory = std::move(mem);
-    void *data = vertexBufferMemory.mapMemory(0,n_bytes);
+void VkEngine::copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size){
+    auto allocInfo = vk::CommandBufferAllocateInfo{
+        .commandPool = *get_current_frame().commandPool,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1,
+    };
+
+    auto cmdCopyBuf = std::move(m_vkDevice.allocateCommandBuffers(allocInfo).front());
+
+    cmdCopyBuf.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=0, .dstOffset = 0, .size=size});
+    cmdCopyBuf.end();
+
+    auto submitInfo= vk::SubmitInfo{};
+    submitInfo.setCommandBuffers(*cmdCopyBuf);
+    m_vkQueue.submit(submitInfo, nullptr);
+    // We wait to ensure the transfer happened
+    m_vkQueue.waitIdle();
+}
+
+void VkEngine::init_vtx_buffer() {
     auto const& src = std::span{vtx_raw_data::ndc_triangle_verts};
-    memcpy(data, src.data(), src.size_bytes());
-    vertexBufferMemory.unmapMemory();
+
+    auto [stagingBuf, stagingMem] = make_staging_buffer(src.size_bytes());
+    void *staging_data = stagingMem.mapMemory(0,src.size_bytes());
+    std::memcpy(staging_data, src.data(), src.size_bytes());
+    stagingMem.unmapMemory();
+
+    std::tie(
+        vertexBuffer,
+        vertexBufferMemory
+    ) = make_vertex_buffer(src.size_bytes(), vk::SharingMode::eExclusive);
+    copy_buffer(stagingBuf,vertexBuffer,src.size_bytes());
 
 }
 void VkEngine::init_vulkan() try {
@@ -423,7 +449,7 @@ void VkEngine::init() {
     init_pipeline();
     init_commands();
     init_sync_structures();
-    init_vtx_data();
+    init_vtx_buffer();
 }
 void VkEngine::record_commands_to_buffer(u32 imageIndex){
     auto& cmdBuf = get_current_frame().commandBuffer;
@@ -482,7 +508,7 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
             m_swapchain.extent
         }
     );
-    cmdBuf.draw(st_cast<u32>(n_vertices),1,0,0);
+    cmdBuf.draw(st_cast<u32>(vtx_raw_data::ndc_triangle_verts.size()),1,0,0);
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
         cmdBuf, swapchainImage, 
@@ -497,6 +523,11 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
 }
 
 void VkEngine::draw() {
+    // We perform this early check here in order to prevent a resized framebuffer to present a previous image
+    if (m_framebufferResized){
+        m_framebufferResized = false;
+        recreate_swapchain();
+    }
     auto& frame = get_current_frame();
     // 1. wait for previous frame to signal the fence
     auto fenceRV = m_vkDevice.waitForFences(*frame.fence, vk::True, numeric_max<u64>);
@@ -607,6 +638,8 @@ void VkEngine::cleanup() {
         m_vkDevice.clear();
         m_vkPhysicalDevice.clear();
         m_vkSurface.clear();
+        vertexBuffer.clear();
+        vertexBufferMemory.clear();
         // this cant be done here, shouldnt it happen after destruction of raii stuff?
         m_window = nullptr;
     }

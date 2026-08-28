@@ -50,18 +50,10 @@ struct VkEngine {
     vk::raii::PipelineLayout m_vkPipelineLayout{nullptr};
     vk::raii::Pipeline m_vkPipeline{nullptr};
 
-    vk::raii::CommandPool m_commandPool{nullptr};
     void record_commands_to_buffer(u32 imageIndex);
 
     FrameData& get_current_frame();
 
-
-    // struct idea:
-    struct VBO{
-        size_t n_vertices{};
-        vk::raii::Buffer buf{nullptr};
-        vk::raii::DeviceMemory memory{nullptr};
-    };
 
     static constexpr size_t n_vertices  = 3;
     vk::raii::Buffer vertexBuffer{nullptr};
@@ -82,12 +74,13 @@ struct VkEngine {
   private:
     void init_window();
     void init_vulkan();
-    void init_vtx_data();
+    void init_vtx_buffer();
     void init_swapchain();
     void init_pipeline();
     void init_commands();
     void init_sync_structures();
 
+    void copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size);
     void recreate_swapchain();
     [[nodiscard]] 
     auto make_shader_module(std::span<const char> spirv_src);
@@ -101,10 +94,10 @@ struct VkEngine {
             bool matches_filter = type_flags_required & (1 << idx);
             bool matches_properties = (propertyFlags & prop_flags_required) == prop_flags_required;
             if (!matches_filter){
-                LOG_DBG("Memtype: [{}]{} does not match mem_type_filter",idx, vk::to_string(memoryType.propertyFlags));
+ //               LOG_DBG("Memtype: [{}] does not match mem_type_filter",idx);
             }
             if (!matches_properties){
-                LOG_DBG("Memtype: [{}]{} does not match property flags ({})",idx, vk::to_string(memoryType.propertyFlags),vk::to_string(prop_flags_required));
+//                LOG_DBG("Memtype: [{}]{} does not match property flags ({})",idx, vk::to_string(memoryType.propertyFlags),vk::to_string(prop_flags_required));
             }
             if (matches_filter && matches_properties){
                 selected_mem_type_idx = idx;
@@ -113,36 +106,56 @@ struct VkEngine {
         }
         if (selected_mem_type_idx == numeric_max<u32>) {
             LOG_FATAL("Unable to find suitable memory type for buffer creation.");
+        }else{
+            auto const& memoryType  = device_memory_properties.memoryTypes[selected_mem_type_idx];
+            LOG_DBG(
+                "Selected Memtype: [{}]{} for ({})",
+                selected_mem_type_idx, 
+                vk::to_string(memoryType.propertyFlags),
+                vk::to_string(prop_flags_required)
+            );
         }
         return selected_mem_type_idx;
     }
-    inline auto make_vertex_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
+    inline auto make_buffer( size_t size_bytes,  vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memFlags){
         auto buf = vk::raii::Buffer{
             m_vkDevice,
-            vk::BufferCreateInfo{
+            {
                 .size = size_bytes,
-                .usage = vk::BufferUsageFlagBits::eVertexBuffer,
-                .sharingMode = sharing_mode
+                .usage = usage,
+                .sharingMode = vk::SharingMode::eExclusive,
             },
         };
         auto mem_requirements = buf.getMemoryRequirements();
         auto memType = select_memory_type(
             mem_requirements.memoryTypeBits,
-            vk::MemoryPropertyFlagBits::eHostVisible |
-            vk::MemoryPropertyFlagBits::eHostCoherent
+            memFlags
         );
-        auto memAllocInfo = vk::MemoryAllocateInfo{
-            .allocationSize = mem_requirements.size,
-            .memoryTypeIndex = memType,
-        };
         auto memory = vk::raii::DeviceMemory{
             m_vkDevice,
-            memAllocInfo,
+            {
+                .allocationSize = mem_requirements.size,
+                .memoryTypeIndex = memType,
+            },
         };
         
         buf.bindMemory(*memory, 0);
 
         return std::pair{std::move(buf),std::move(memory)};
+    }
+    inline auto make_vertex_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
+        return make_buffer(
+            size_bytes,
+            vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal
+        );
+    }
+    inline auto make_staging_buffer( size_t size_bytes){
+        return make_buffer(
+            size_bytes,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+        );
     }
 
     // required to extend the lifetime of the object names we use for debugging
