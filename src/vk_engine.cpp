@@ -5,7 +5,9 @@
 #include <thread>
 #include <vulkan/vulkan_raii.hpp>
 
+#include "SDL3/SDL_events.h"
 #include "SDL3/SDL_init.h"
+#include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_oldnames.h"
 #include "SDL3/SDL_stdinc.h"
 #include "SDL3/SDL_video.h"
@@ -98,19 +100,43 @@ void VkEngine::copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, 
     m_vkQueue.waitIdle();
 }
 
-void VkEngine::init_vtx_buffer() {
-    auto const& src = std::span{vtx_raw_data::ndc_triangle_verts};
+void VkEngine::init_buffers() {
+    auto const& vtx_src = std::span{vtx_raw_data::ccw_quad_verts};
 
-    auto [stagingBuf, stagingMem] = make_staging_buffer(src.size_bytes());
-    void *staging_data = stagingMem.mapMemory(0,src.size_bytes());
-    std::memcpy(staging_data, src.data(), src.size_bytes());
-    stagingMem.unmapMemory();
+    auto [
+        vtxStagingBuf,
+        vtxStagingMem
+    ] = make_staging_buffer(vtx_src.size_bytes());
+    void *vtx_staging_data = vtxStagingMem.mapMemory(0,vtx_src.size_bytes());
+    std::memcpy(vtx_staging_data, vtx_src.data(), vtx_src.size_bytes());
+    vtxStagingMem.unmapMemory();
+    
 
     std::tie(
-        vertexBuffer,
-        vertexBufferMemory
-    ) = make_vertex_buffer(src.size_bytes(), vk::SharingMode::eExclusive);
-    copy_buffer(stagingBuf,vertexBuffer,src.size_bytes());
+        m_vertexBuffer,
+        m_vertexBufferMemory
+    ) = make_vertex_buffer(vtx_src.size_bytes(), vk::SharingMode::eExclusive);
+    copy_buffer(vtxStagingBuf,m_vertexBuffer,vtx_src.size_bytes());
+    set_vkobject_dbg_name(m_vertexBuffer, "Vertex buffer");
+
+
+
+    auto const& idx_src = std::span{vtx_raw_data::ccw_quad_indices};
+
+    auto [
+        idxStagingBuf, 
+        idxStagingMem
+    ] = make_staging_buffer(idx_src.size_bytes());
+    void *idx_staging_data = idxStagingMem.mapMemory(0,idx_src.size_bytes());
+    std::memcpy(idx_staging_data, idx_src.data(), idx_src.size_bytes());
+    idxStagingMem.unmapMemory();
+
+    std::tie(
+        m_indexBuffer,
+        m_indexBufferMemory
+    ) = make_index_buffer(idx_src.size_bytes(), vk::SharingMode::eExclusive);
+    copy_buffer(idxStagingBuf,m_indexBuffer,idx_src.size_bytes());
+    set_vkobject_dbg_name(m_vertexBuffer, "Index buffer");
 
 }
 void VkEngine::init_vulkan() try {
@@ -201,6 +227,11 @@ void VkEngine::init_vulkan() try {
     // whereas DEVICE extensions modify the behaviour of a specific vk::Device.
     // Configure Device extensions
     auto device_extensions = std::vector<char const*>{};
+    // These extensions are required, and will be skipped if they are not found
+    static constexpr auto required_device_extensions = std::array{
+        vk::KHRSwapchainExtensionName,
+        vk::EXTExtendedDynamicState3ExtensionName,
+    };
 
     // iterate over all physical devices listed by driver
     for (auto const& physical_device : m_vkInstance.enumeratePhysicalDevices()){
@@ -208,12 +239,19 @@ void VkEngine::init_vulkan() try {
         auto device_api_ver = physical_device.getProperties().apiVersion;
         if (device_api_ver < API_VER) continue;
 
-        // skip if device doesnt support khr swapchain
         auto const supported_extensions = physical_device.enumerateDeviceExtensionProperties();
-        if (!supports_extension(supported_extensions,vk::KHRSwapchainExtensionName)){
+        bool device_supports_required_extensions {true};
+        for (auto const& required_ext: required_device_extensions){
+            if (supports_extension(supported_extensions,required_ext)){
+                device_extensions.push_back(required_ext); 
+            }else{
+                device_supports_required_extensions = false;
+                break;
+            }
+        }
+        if (!device_supports_required_extensions){
             continue;
         }
-        device_extensions.push_back(vk::KHRSwapchainExtensionName); 
 
         auto family = get_pd_queue_family(
             physical_device, 
@@ -236,7 +274,7 @@ void VkEngine::init_vulkan() try {
         queue_info.setQueuePriorities(queue_prio);
 
         
-        auto enabled_features = required_pd_feature_list();
+        auto enabled_features = enabled_physical_device_features();
         try {
             auto deviceCreateInfo= vk::DeviceCreateInfo{
                 .pNext = &enabled_features.get<vk::PhysicalDeviceFeatures2>(),
@@ -248,7 +286,7 @@ void VkEngine::init_vulkan() try {
                 deviceCreateInfo,
             };
         } catch (vk::FeatureNotPresentError e){
-            LOG_FATAL("PD {} is missing a feature: {}",get_pd_name(physical_device),e.what());
+            LOG_FATAL("PD {} is missing a feature: {}",get_physical_dev_name(physical_device),e.what());
             continue;
         }
 
@@ -260,7 +298,7 @@ void VkEngine::init_vulkan() try {
         LOG_FATAL("Unable to select a physical device! Driver listed {}, none matched",//
                   m_vkInstance.enumeratePhysicalDevices().size());
     }else{
-        LOG_INFO("SELECTED GPU: {}",get_pd_name(m_vkPhysicalDevice));
+        LOG_INFO("Device created, PD selected: {}", get_physical_dev_name(m_vkPhysicalDevice));
     }
 
     m_vkQueue = m_vkDevice.getQueue(m_vkQueueFamily, 0);
@@ -279,6 +317,9 @@ void VkEngine::init_vulkan() try {
         },
     };
 }
+// the inputs to a pipeline are roughly:
+// -> Which shader stages will it use, and of which file
+//
 void VkEngine::init_pipeline() {
     auto shader_src = read_file_contents("shaders/slang.spv");
     auto shader_module = make_shader_module(shader_src);
@@ -297,15 +338,14 @@ void VkEngine::init_pipeline() {
         vtxStageInfo,
         fragStageInfo,
     };
-    static constexpr std::array dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-    auto dynamicState = vk::PipelineDynamicStateCreateInfo{ };
-    dynamicState.setDynamicStates(dynamicStates);
+    auto dynamicState = vk::PipelineDynamicStateCreateInfo{}
+        .setDynamicStates(vk_enabledDynamicState);
 
-    auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
     auto binding_desc = Vertex::binding_description();
     auto attr_desc = Vertex::attribute_descriptions();
-    vertexInputState.setVertexBindingDescriptions(binding_desc);
-    vertexInputState.setVertexAttributeDescriptions(attr_desc);
+    auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{}
+        .setVertexBindingDescriptions(binding_desc)
+        .setVertexAttributeDescriptions(attr_desc);
 
 
     auto const iaState=  vk::PipelineInputAssemblyStateCreateInfo{
@@ -323,7 +363,7 @@ void VkEngine::init_pipeline() {
         .rasterizerDiscardEnable = vk::False,
         .polygonMode             = vk::PolygonMode::eFill,
         .cullMode                = vk::CullModeFlagBits::eBack,
-        .frontFace               = vk::FrontFace::eClockwise,
+        .frontFace               = vk::FrontFace::eCounterClockwise,
         .depthBiasEnable         = vk::False,
         .lineWidth               = 1.0f
     };
@@ -351,8 +391,7 @@ void VkEngine::init_pipeline() {
     auto colorBlendState = vk::PipelineColorBlendStateCreateInfo{
         .logicOpEnable = false,
         .logicOp = vk::LogicOp::eCopy,
-    };
-    colorBlendState.setAttachments(colorBlendAttachment);
+    }.setAttachments(colorBlendAttachment);
 
     m_vkPipelineLayout = vk::raii::PipelineLayout{
         m_vkDevice,
@@ -386,8 +425,6 @@ void VkEngine::init_pipeline() {
         nullptr,
         pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>()
     );
-
-
 }
 
 void VkEngine::init_commands() {
@@ -449,7 +486,26 @@ void VkEngine::init() {
     init_pipeline();
     init_commands();
     init_sync_structures();
-    init_vtx_buffer();
+    init_buffers();
+}
+void VkEngine::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf){
+    // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
+    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::eViewport));
+    cmdBuf.setViewport(
+        0, 
+        dyn_get_viewport()
+    );
+
+    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::eScissor));
+    cmdBuf.setScissor(
+        0,
+        dyn_get_scissor()
+    );
+
+    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::ePolygonModeEXT));
+    cmdBuf.setPolygonModeEXT(
+        dyn_get_polymode()
+    );
 }
 void VkEngine::record_commands_to_buffer(u32 imageIndex){
     auto& cmdBuf = get_current_frame().commandBuffer;
@@ -491,24 +547,12 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
         vk::PipelineBindPoint::eGraphics,
         *m_vkPipeline
     );
-    cmdBuf.bindVertexBuffers(0, *vertexBuffer, {0});
-    // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
-    cmdBuf.setViewport(
-        0, 
-        vk::Viewport{
-            0.0f,0.0f, // viewport position
-            st_cast<f32>(m_swapchain.extent.width), st_cast<f32>(m_swapchain.extent.height),
-            0.0f, 1.0f // min and max depth
-        }
-    );
-    cmdBuf.setScissor(
-        0,
-        vk::Rect2D{
-            vk::Offset2D{0,0},
-            m_swapchain.extent
-        }
-    );
-    cmdBuf.draw(st_cast<u32>(vtx_raw_data::ndc_triangle_verts.size()),1,0,0);
+    cmdBuf.bindVertexBuffers(0, *m_vertexBuffer, {0});
+    cmdBuf.bindIndexBuffer(*m_indexBuffer, 0, vtx_raw_data::vk_IndexType(vtx_raw_data::ccw_quad_indices));
+    set_dynamic_state(cmdBuf);
+    cmdBuf.drawIndexed(vtx_raw_data::idx_count(vtx_raw_data::ccw_quad_indices),1, 0,0,0);
+//    cmdBuf.draw(vtx_raw_data::vtx_count(vtx_raw_data::),1,0,0);
+
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
         cmdBuf, swapchainImage, 
@@ -593,6 +637,13 @@ void VkEngine::draw() {
     m_frameCount++;
 }
 
+void VkEngine::handle_key_down(SDL_KeyboardEvent const& key_ev){
+    switch(key_ev.key){
+        case SDLK_T:{
+            m_vkPolygonMode = m_vkPolygonMode == vk::PolygonMode::eFill ? vk::PolygonMode::eLine : vk::PolygonMode::eFill;
+        } break;
+    }
+}
 void VkEngine::handle_inputs(){
     SDL_Event e{};
     while ((SDL_PollEvent(&e)) != 0) {
@@ -607,6 +658,10 @@ void VkEngine::handle_inputs(){
         }
         if (e.type == SDL_EVENT_WINDOW_RESIZED) {
             m_framebufferResized = true;
+        }
+
+        if (e.type == SDL_EVENT_KEY_DOWN){
+            handle_key_down(e.key);
         }
     }
 }
@@ -635,11 +690,16 @@ void VkEngine::cleanup() {
         m_vkQueue.clear();
         m_vkPipelineLayout.clear();
         m_vkPipeline.clear();
+
+        m_vertexBuffer.clear();
+        m_vertexBufferMemory.clear();
+
+        m_indexBuffer.clear();
+        m_indexBufferMemory.clear();
+
         m_vkDevice.clear();
         m_vkPhysicalDevice.clear();
         m_vkSurface.clear();
-        vertexBuffer.clear();
-        vertexBufferMemory.clear();
         // this cant be done here, shouldnt it happen after destruction of raii stuff?
         m_window = nullptr;
     }

@@ -8,6 +8,7 @@
 #include <vulkan/vulkan_to_string.hpp>
 
 FWD_DECL_STRUCT(SDL_Window);
+FWD_DECL_STRUCT(SDL_KeyboardEvent);
 struct VkEngine {
   public:
     static constexpr u32 syncFrameCount = 2;
@@ -52,12 +53,37 @@ struct VkEngine {
 
     void record_commands_to_buffer(u32 imageIndex);
 
+    static constexpr inline auto vk_enabledDynamicState = std::array{
+        vk::DynamicState::eViewport, 
+        vk::DynamicState::eScissor,
+        vk::DynamicState::ePolygonModeEXT,
+    };
+    void set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf);
+    auto dyn_get_viewport() const{
+        return vk::Viewport{
+            0.0f,0.0f, // viewport position
+            st_cast<f32>(m_swapchain.extent.width), st_cast<f32>(m_swapchain.extent.height),
+            0.0f, 1.0f // min and max depth
+        };
+    }
+    auto dyn_get_scissor() const{
+        return vk::Rect2D{
+            vk::Offset2D{0,0},
+            m_swapchain.extent
+        };
+    }
+    auto dyn_get_polymode() const{
+        return m_vkPolygonMode;
+    }
+    vk::PolygonMode m_vkPolygonMode {vk::PolygonMode::eFill};
     FrameData& get_current_frame();
 
 
-    static constexpr size_t n_vertices  = 3;
-    vk::raii::Buffer vertexBuffer{nullptr};
-    vk::raii::DeviceMemory vertexBufferMemory{nullptr};
+    vk::raii::Buffer m_vertexBuffer{nullptr};
+    vk::raii::DeviceMemory m_vertexBufferMemory{nullptr};
+
+    vk::raii::Buffer m_indexBuffer{nullptr};
+    vk::raii::DeviceMemory m_indexBufferMemory{nullptr};
 
     VkEngine& get_instance();
 
@@ -68,13 +94,14 @@ struct VkEngine {
 
     void run();
     void draw();
+    void handle_key_down(SDL_KeyboardEvent const& key_ev);
     void handle_inputs();
     
 
   private:
     void init_window();
     void init_vulkan();
-    void init_vtx_buffer();
+    void init_buffers();
     void init_swapchain();
     void init_pipeline();
     void init_commands();
@@ -147,6 +174,13 @@ struct VkEngine {
         return make_buffer(
             size_bytes,
             vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal
+        );
+    }
+    inline auto make_index_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
+        return make_buffer(
+            size_bytes,
+            vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
             vk::MemoryPropertyFlagBits::eDeviceLocal
         );
     }
