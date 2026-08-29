@@ -1,0 +1,7 @@
+#ifndef GLSL_TYPES_H
+#define GLSL_TYPES_H
+typealias vec2 = vector<float,2>;
+typealias vec3 = vector<float,3>;
+typealias vec4 = vector<float,4>;
+typealias mat4 = matrix<float,4,4>;
+#endif // GLSL_TYPES_H

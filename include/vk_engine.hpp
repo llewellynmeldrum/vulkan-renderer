@@ -1,6 +1,7 @@
 #pragma once 
 #include "shared.hpp"
 #include "vk_types.hpp"
+#include "camera.hpp"
 #include "vk_frame_data.hpp"
 #include "vk_swapchain.hpp"
 #include "vulkan/vulkan.hpp"
@@ -33,6 +34,7 @@ struct VkEngine {
     bool m_framebufferResized{};
     u32 m_vkQueueFamily{};
 
+    Camera m_cam;
 
     SDL_Window* m_window{};
 
@@ -48,6 +50,9 @@ struct VkEngine {
 
     std::array<FrameData, syncFrameCount> m_inflightFrames{};
 
+    vk::raii::DescriptorSetLayout m_vkDescriptorSetLayout{nullptr};
+    vk::raii::DescriptorPool m_vkDescriptorPool{nullptr};
+    std::vector<vk::raii::DescriptorSet> m_vkDescriptorSets;
     vk::raii::PipelineLayout m_vkPipelineLayout{nullptr};
     vk::raii::Pipeline m_vkPipeline{nullptr};
 
@@ -59,24 +64,9 @@ struct VkEngine {
         vk::DynamicState::ePolygonModeEXT,
     };
     void set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf);
-    auto dyn_get_viewport() const{
-        return vk::Viewport{
-            0.0f,0.0f, // viewport position
-            st_cast<f32>(m_swapchain.extent.width), st_cast<f32>(m_swapchain.extent.height),
-            0.0f, 1.0f // min and max depth
-        };
-    }
-    auto dyn_get_scissor() const{
-        return vk::Rect2D{
-            vk::Offset2D{0,0},
-            m_swapchain.extent
-        };
-    }
-    auto dyn_get_polymode() const{
-        return m_vkPolygonMode;
-    }
     vk::PolygonMode m_vkPolygonMode {vk::PolygonMode::eFill};
     FrameData& get_current_frame();
+    u32 get_current_frame_index();
 
 
     vk::raii::Buffer m_vertexBuffer{nullptr};
@@ -104,9 +94,13 @@ struct VkEngine {
     void init_buffers();
     void init_swapchain();
     void init_pipeline();
+    void init_descriptor_set_layout();
+    void init_descriptor_pool();
+    void init_descriptor_sets();
     void init_commands();
     void init_sync_structures();
 
+    void update_uniforms(FrameData const& frame);
     void copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size);
     void recreate_swapchain();
     [[nodiscard]] 
@@ -177,6 +171,14 @@ struct VkEngine {
             vk::MemoryPropertyFlagBits::eDeviceLocal
         );
     }
+    inline auto make_uniform_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
+        return make_buffer(
+            size_bytes,
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eDeviceLocal
+        );
+
+    }
     inline auto make_index_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
         return make_buffer(
             size_bytes,
@@ -190,6 +192,22 @@ struct VkEngine {
             vk::BufferUsageFlagBits::eTransferSrc,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
         );
+    }
+    auto dyn_get_viewport() const{
+        return vk::Viewport{
+            0.0f,0.0f, // viewport position
+            st_cast<f32>(m_swapchain.extent.width), st_cast<f32>(m_swapchain.extent.height),
+            0.0f, 1.0f // min and max depth
+        };
+    }
+    auto dyn_get_scissor() const{
+        return vk::Rect2D{
+            vk::Offset2D{0,0},
+            m_swapchain.extent
+        };
+    }
+    auto dyn_get_polymode() const{
+        return m_vkPolygonMode;
     }
 
     // required to extend the lifetime of the object names we use for debugging

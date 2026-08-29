@@ -1,10 +1,10 @@
 
 
-#include <SDL3/SDL_vulkan.h>
-#include <SDL3/SDL.h>
 #include <thread>
 #include <vulkan/vulkan_raii.hpp>
 
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_vulkan.h"
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_keycode.h"
@@ -12,13 +12,18 @@
 #include "SDL3/SDL_stdinc.h"
 #include "SDL3/SDL_video.h"
 
+#include "glm/gtc/matrix_transform.hpp"
+
+#include "format_specs.hpp"
 #include "file_io.hpp"
 #include "shared.hpp"
+#include "timer.hpp"
 #include "vertex.hpp"
 #include "vk_engine.hpp"
 #include "vertex_raw_data.hpp"
 #include "vk_debug.hpp"
 #include "vk_util.hpp"
+#include "vk_buffers.hpp"
 #include "vk_init_helpers.hpp"
 #include "vulkan/vulkan.hpp"
 
@@ -93,16 +98,18 @@ void VkEngine::copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, 
     cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=0, .dstOffset = 0, .size=size});
     cmdCopyBuf.end();
 
-    auto submitInfo= vk::SubmitInfo{};
-    submitInfo.setCommandBuffers(*cmdCopyBuf);
-    m_vkQueue.submit(submitInfo, nullptr);
+    m_vkQueue.submit(
+        vk::SubmitInfo{}
+            .setCommandBuffers(*cmdCopyBuf),
+        nullptr
+    );
     // We wait to ensure the transfer happened
     m_vkQueue.waitIdle();
 }
 
 void VkEngine::init_buffers() {
+    // VERTEX BUFFER
     auto const& vtx_src = std::span{vtx_raw_data::ccw_quad_verts};
-
     auto [
         vtxStagingBuf,
         vtxStagingMem
@@ -121,6 +128,7 @@ void VkEngine::init_buffers() {
 
 
 
+    // INDEX BUFFER
     auto const& idx_src = std::span{vtx_raw_data::ccw_quad_indices};
 
     auto [
@@ -135,8 +143,20 @@ void VkEngine::init_buffers() {
         m_indexBuffer,
         m_indexBufferMemory
     ) = make_index_buffer(idx_src.size_bytes(), vk::SharingMode::eExclusive);
+
     copy_buffer(idxStagingBuf,m_indexBuffer,idx_src.size_bytes());
     set_vkobject_dbg_name(m_vertexBuffer, "Index buffer");
+
+
+    // UNIFORM BUFFERS
+    for (auto& frame : m_inflightFrames){
+        auto const bufSize = static_cast<u32>(sizeof(UniformBufferObject));
+        std::tie(
+            frame.uniformBuffer,
+            frame.uniformBufferMemory 
+        ) = make_uniform_buffer(bufSize,vk::SharingMode::eExclusive);
+        frame.uniformBufferMappedMemory = frame.uniformBufferMemory.mapMemory(0,bufSize);
+    }
 
 }
 void VkEngine::init_vulkan() try {
@@ -320,20 +340,81 @@ void VkEngine::init_vulkan() try {
 // the inputs to a pipeline are roughly:
 // -> Which shader stages will it use, and of which file
 //
+void VkEngine::init_descriptor_sets() {
+    std::array<vk::DescriptorSetLayout, syncFrameCount> layouts{}; 
+    layouts.fill(m_vkDescriptorSetLayout);
+    ASSERT(layouts.size() == syncFrameCount);
+
+    m_vkDescriptorSets = m_vkDevice.allocateDescriptorSets(
+        vk::DescriptorSetAllocateInfo{}
+        .setDescriptorPool(m_vkDescriptorPool)
+        .setSetLayouts(layouts)
+    );
+    for (auto i = 0uz; i<syncFrameCount; i++){
+        auto bufferInfo = 
+            vk::DescriptorBufferInfo{}
+            .setBuffer(*m_inflightFrames[i].uniformBuffer)
+            .setOffset(0)
+            .setRange(sizeof(UniformBufferObject))
+         ;
+        m_vkDevice.updateDescriptorSets(
+            vk::WriteDescriptorSet{}
+                .setDstSet(*m_vkDescriptorSets[i])
+                .setDstBinding(0)
+                .setDstArrayElement(0)
+                .setDescriptorCount(1)
+                .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+                .setBufferInfo(bufferInfo),
+             {}
+        );
+    }
+}
+void VkEngine::init_descriptor_pool() {
+    auto poolSizes = vk::DescriptorPoolSize{}
+        .setType(vk::DescriptorType::eUniformBuffer)
+        .setDescriptorCount(syncFrameCount)
+    ;
+    m_vkDescriptorPool = vk::raii::DescriptorPool{
+        m_vkDevice,
+        vk::DescriptorPoolCreateInfo{}
+            .setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet)
+            .setMaxSets(syncFrameCount)
+            .setPoolSizes(poolSizes)
+    };
+}
+
+void VkEngine::init_descriptor_set_layout() {
+
+    // Descriptor set bindings all combine into a single desciptor set layout.
+    auto uboLayoutBinding = vk::DescriptorSetLayoutBinding{}
+        .setBinding(0)
+        .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+        .setDescriptorCount(1)
+        .setStageFlags(vk::ShaderStageFlagBits::eVertex)
+    ;
+
+    m_vkDescriptorSetLayout = vk::raii::DescriptorSetLayout{
+        m_vkDevice, 
+        vk::DescriptorSetLayoutCreateInfo{}
+            .setBindingCount(1)
+            .setBindings(uboLayoutBinding)
+    };
+}
+
 void VkEngine::init_pipeline() {
     auto shader_src = read_file_contents("shaders/slang.spv");
     auto shader_module = make_shader_module(shader_src);
 
-    auto vtxStageInfo = vk::PipelineShaderStageCreateInfo{
-        .stage = vk::ShaderStageFlagBits::eVertex,
-        .module = shader_module,
-        .pName = "vertMain",
-    };
-    auto fragStageInfo = vk::PipelineShaderStageCreateInfo{
-        .stage = vk::ShaderStageFlagBits::eFragment,
-        .module = shader_module,
-        .pName = "fragMain",
-    };
+    auto vtxStageInfo = vk::PipelineShaderStageCreateInfo{}
+        .setStage(vk::ShaderStageFlagBits::eVertex)
+        .setModule(shader_module)
+        .setPName("vertMain")
+    ;
+    auto fragStageInfo = vk::PipelineShaderStageCreateInfo{}
+        .setStage(vk::ShaderStageFlagBits::eFragment)
+        .setModule(shader_module)
+        .setPName("fragMain")
+    ;
     std::array shaderStages{
         vtxStageInfo,
         fragStageInfo,
@@ -341,11 +422,9 @@ void VkEngine::init_pipeline() {
     auto dynamicState = vk::PipelineDynamicStateCreateInfo{}
         .setDynamicStates(vk_enabledDynamicState);
 
-    auto binding_desc = Vertex::binding_description();
-    auto attr_desc = Vertex::attribute_descriptions();
     auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{}
-        .setVertexBindingDescriptions(binding_desc)
-        .setVertexAttributeDescriptions(attr_desc);
+        .setVertexBindingDescriptions(VertexTraits<Vertex>::binding_desc)
+        .setVertexAttributeDescriptions(VertexTraits<Vertex>::attribute_desc);
 
 
     auto const iaState=  vk::PipelineInputAssemblyStateCreateInfo{
@@ -362,8 +441,8 @@ void VkEngine::init_pipeline() {
         .depthClampEnable        = vk::False,
         .rasterizerDiscardEnable = vk::False,
         .polygonMode             = vk::PolygonMode::eFill,
-        .cullMode                = vk::CullModeFlagBits::eBack,
-        .frontFace               = vk::FrontFace::eCounterClockwise,
+        .cullMode                = vk::CullModeFlagBits::eNone,
+        .frontFace               = vk::FrontFace::eClockwise,
         .depthBiasEnable         = vk::False,
         .lineWidth               = 1.0f
     };
@@ -395,10 +474,9 @@ void VkEngine::init_pipeline() {
 
     m_vkPipelineLayout = vk::raii::PipelineLayout{
         m_vkDevice,
-        vk::PipelineLayoutCreateInfo{
-            .setLayoutCount = 0,
-            .pushConstantRangeCount = 0,
-        },
+        vk::PipelineLayoutCreateInfo{}
+            .setPushConstantRangeCount(0)
+            .setSetLayouts(*m_vkDescriptorSetLayout)
     };
 
     auto pipelineCreateInfoChain =  vk::StructureChain{
@@ -483,10 +561,13 @@ void VkEngine::init() {
     init_window();
     init_vulkan();
     init_swapchain();
-    init_pipeline();
     init_commands();
+    init_descriptor_set_layout();
+    init_buffers(); // might need to move before init_pipeline
+    init_pipeline();
+    init_descriptor_pool();
+    init_descriptor_sets();
     init_sync_structures();
-    init_buffers();
 }
 void VkEngine::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf){
     // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
@@ -507,9 +588,18 @@ void VkEngine::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf){
         dyn_get_polymode()
     );
 }
+// aka recordCommadBuffer in tutorial
 void VkEngine::record_commands_to_buffer(u32 imageIndex){
     auto& cmdBuf = get_current_frame().commandBuffer;
+    auto const frame_idx = get_current_frame_index();
     cmdBuf.begin({});
+    cmdBuf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        m_vkPipelineLayout,
+        0, 
+        *m_vkDescriptorSets[frame_idx],
+        nullptr
+    );
     auto const swapchainImage = m_swapchain.images.at(imageIndex);
 
     vk_util::transition_image_layout(
@@ -550,8 +640,8 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
     cmdBuf.bindVertexBuffers(0, *m_vertexBuffer, {0});
     cmdBuf.bindIndexBuffer(*m_indexBuffer, 0, vtx_raw_data::vk_IndexType(vtx_raw_data::ccw_quad_indices));
     set_dynamic_state(cmdBuf);
+
     cmdBuf.drawIndexed(vtx_raw_data::idx_count(vtx_raw_data::ccw_quad_indices),1, 0,0,0);
-//    cmdBuf.draw(vtx_raw_data::vtx_count(vtx_raw_data::),1,0,0);
 
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
@@ -566,6 +656,25 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
     cmdBuf.end();
 }
 
+void VkEngine::update_uniforms(FrameData const& frame) {
+    auto t = timer::get_seconds(timer::since_epoch());
+    auto theta = static_cast<f32>(t * glm::radians(90.0f));
+    static constexpr auto origin = glm::vec3(0.0f);
+    static constexpr auto up= glm::vec3(0.0f, 1.0f, 0.0f);
+    static constexpr auto vfov = f32{40.0f};
+    static constexpr auto znear = f32{0.01f};
+    static constexpr auto zfar = f32{100.0f};
+    auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
+    auto ubo = UniformBufferObject{
+        .model = glm::translate(glm::mat4(1.0f),glm::vec3{2.0f,2.0f, 4.0f}),//glm::rotate(glm::mat4(1.0f), theta, glm::vec3(0.0f,0.0f,1.0f)),
+        .view = glm::lookAt(m_cam.pos,m_cam.pos + m_cam.get_front(), up),
+        .proj =  glm::perspective(vfov, aspect, znear,zfar),
+    };
+    // HACK: glm uses y up for clip space, vulkan uses y down. flip here
+    ubo.proj[1][1] *= -1; 
+    memcpy(frame.uniformBufferMappedMemory, &ubo,sizeof(ubo));
+
+}
 void VkEngine::draw() {
     // We perform this early check here in order to prevent a resized framebuffer to present a previous image
     if (m_framebufferResized){
@@ -593,35 +702,28 @@ void VkEngine::draw() {
         ASSERT(acquire_res==vk::Result::eSuccess || acquire_res==vk::Result::eSuboptimalKHR);
     }
     // only reset if we acquired an image from the swapchain, else we early returned
+    update_uniforms(frame);
     m_vkDevice.resetFences(*frame.fence);
 
     auto & cmdBuf = frame.commandBuffer;
     cmdBuf.reset();
     record_commands_to_buffer(imageIndex);
 
-    auto submit_info = vk::SubmitInfo{};
-    vk::PipelineStageFlags waitDstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-
-    submit_info.setCommandBuffers(*cmdBuf);
-    submit_info.setWaitSemaphores(*frame.presentCompleteSemaphore);
-    submit_info.setSignalSemaphores(*m_swapchain.renderFinishedSemaphores[imageIndex]);
-    submit_info.setWaitDstStageMask(waitDstStageMask);
+    auto waitDstStageMask = static_cast<vk::PipelineStageFlags>(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     m_vkQueue.submit(
-        submit_info,
+        vk::SubmitInfo{}
+            .setCommandBuffers(*cmdBuf)
+            .setWaitSemaphores(*frame.presentCompleteSemaphore)
+            .setSignalSemaphores(*m_swapchain.renderFinishedSemaphores[imageIndex])
+            .setWaitDstStageMask(waitDstStageMask),
         *frame.fence
     );
 
     auto const present_res = m_vkQueue.presentKHR(
-        vk::PresentInfoKHR{
-            .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &*m_swapchain.renderFinishedSemaphores[imageIndex],
-
-            .swapchainCount = 1,
-
-            .pSwapchains = &*m_swapchain.descriptor,
-
-            .pImageIndices = &imageIndex,
-        }
+        vk::PresentInfoKHR{}
+            .setWaitSemaphores(*m_swapchain.renderFinishedSemaphores[imageIndex])
+            .setSwapchains(*m_swapchain.descriptor)
+            .setImageIndices(imageIndex)
     );
     if (   present_res == vk::Result::eSuboptimalKHR 
         || present_res == vk::Result::eErrorOutOfDateKHR
@@ -638,11 +740,50 @@ void VkEngine::draw() {
 }
 
 void VkEngine::handle_key_down(SDL_KeyboardEvent const& key_ev){
+    auto rotate_speed = f32{1.0f};
     switch(key_ev.key){
         case SDLK_T:{
             m_vkPolygonMode = m_vkPolygonMode == vk::PolygonMode::eFill ? vk::PolygonMode::eLine : vk::PolygonMode::eFill;
         } break;
+
+        case SDLK_LEFT:{
+            m_cam.rotate_left(rotate_speed);
+        } break;
+        case SDLK_RIGHT:{
+            m_cam.rotate_right(rotate_speed);
+        } break;
+        case SDLK_UP:{
+            m_cam.rotate_up(rotate_speed);
+        } break;
+        case SDLK_DOWN:{
+            m_cam.rotate_down(rotate_speed);
+        } break;
+        case SDLK_A:{
+            m_cam.move_left(0.1f);
+        } break;
+        case SDLK_D:{
+            m_cam.move_right(0.1f);
+        } break;
+        case SDLK_W:{
+            m_cam.move_forward(0.1f);
+            //m_camPos.z -= 0.1f;
+        } break;
+        case SDLK_S:{
+            m_cam.move_backward(0.1f);
+            //m_camPos.z += 0.1f;
+        } break;
+        case SDLK_Q:{
+            m_cam.move_up(0.1f);
+            //m_camPos.z += 0.1f;
+        } break;
+        case SDLK_E:{
+            m_cam.move_down(0.1f);
+            //m_camPos.z += 0.1f;
+        } break;
     }
+
+    LOG_DBG("pos: {}",m_cam.pos);
+    LOG_DBG("origin: {}",m_cam.pos + m_cam.get_front());
 }
 void VkEngine::handle_inputs(){
     SDL_Event e{};
@@ -675,8 +816,6 @@ void VkEngine::run() {
             continue;
         }
         draw();
-        std::println("fps:{:4.2f}",
-                     m_frameCount / timer::get_seconds(timer::since_epoch()));
     }
 }
 void VkEngine::cleanup() {
@@ -688,11 +827,15 @@ void VkEngine::cleanup() {
             frame = FrameData{};
         }
         m_vkQueue.clear();
+        m_vkDescriptorSetLayout.clear();
         m_vkPipelineLayout.clear();
         m_vkPipeline.clear();
 
         m_vertexBuffer.clear();
         m_vertexBufferMemory.clear();
+
+        m_vkDescriptorSets.clear();
+        m_vkDescriptorPool.clear();
 
         m_indexBuffer.clear();
         m_indexBufferMemory.clear();
@@ -713,8 +856,11 @@ bool VkEngine::is_initialized() {
     return m_window; 
 }
 
+u32 VkEngine::get_current_frame_index(){
+    return m_frameCount % syncFrameCount;
+}
 FrameData& VkEngine::get_current_frame() {
-    return m_inflightFrames.at(m_frameCount % syncFrameCount);
+    return m_inflightFrames.at(get_current_frame_index());
 }
 
 void VkEngine::cleanup_window() const noexcept{
