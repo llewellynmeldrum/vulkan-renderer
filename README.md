@@ -1,4 +1,6 @@
 # learning vulkan
+<img width="400" alt="square_vk" src="https://github.com/user-attachments/assets/53c3042d-3524-46f6-9a5f-b68a951bc5ca" />
+
 
 In order to update my minecraft clone to vulkan, im going to take some time to learn it separately and make some test apps first. My plan:
 
