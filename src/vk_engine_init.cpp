@@ -1,6 +1,5 @@
 #include <thread>
 
-#include <vulkan/vulkan_raii.hpp>
 
 #include "sdl3_types.hpp"
 #include "glm_types.hpp"
@@ -19,7 +18,28 @@
 
 static char const* APP_NAME = "Test Window";
 
-
+void VkEngine::init() {
+    LOG_INFO("INITIALIZING ENGINE ({})", static_cast<void*>(this));
+    ASSERT(m_loadedEngine == nullptr);
+    m_loadedEngine = this;
+    try{
+        init_window();
+        init_vk_instance();
+        init_vk_surface();
+        init_vk_device_and_queue();
+        init_swapchain();
+        init_inflightFrames();
+        init_descriptor_set_layout();
+        init_buffers();  //  TODO: refactor to be like the others
+        init_pipeline();  //  TODO: refactor to be like the others
+        init_descriptor_pool();
+        init_descriptor_sets(); //  TODO: refactor to be like the others
+        init_sync_structures(); //  TODO: refactor to be like the others
+    }catch(vk::SystemError const& e){
+        LOG_FATAL("Failed to initialize vulkan: {}", e.what());
+    }
+}
+[[nodiscard]]
 SDL_Window* make_window(vk::Extent2D m_windowLogicalSize){
     SDL_Window* m_window{nullptr};
     static constexpr auto init_flags = 
@@ -50,7 +70,7 @@ SDL_Window* make_window(vk::Extent2D m_windowLogicalSize){
 void VkEngine::init_window() {
     m_window = make_window(m_windowLogicalSize);
 }
-
+[[nodiscard]]
 Swapchain make_swapchain(
     SwapchainSettings in
 ){
@@ -221,20 +241,13 @@ void VkEngine::init_buffers() {
     }
 
 }
-// consumes: 
-// - m_vkInstance
-// produces: 
-// - m_vkPhysicalDevice
-// - m_vkDevice
-// - m_vkQueue
-// - m_vkQueueFamily
-//
 struct DeviceQueueContext{
     vk::raii::PhysicalDevice m_vkPhysicalDevice{nullptr};
     vk::raii::Device         m_vkDevice{nullptr};
     vk::raii::Queue          m_vkQueue{nullptr};
     u32                      m_vkQueueFamily{};
 };
+[[nodiscard]]
 DeviceQueueContext make_vk_device_and_queue(
     vk::raii::Instance const& m_vkInstance,
     vk::raii::SurfaceKHR const& m_vkSurface,
@@ -330,7 +343,7 @@ void VkEngine::init_vk_device_and_queue(){
 	m_vkQueue = std::move(ctx.m_vkQueue);
 	m_vkQueueFamily = std::move(ctx.m_vkQueueFamily);
 }
-
+[[nodiscard]]
 auto make_vk_surface(
     vk::raii::Instance const& instance,
     SDL_Window* window
@@ -353,6 +366,7 @@ struct VkInstanceContext{
     vk::raii::DebugUtilsMessengerEXT m_vkDebugMessenger {nullptr};
     
 };
+[[nodiscard]]
 VkInstanceContext make_vk_instance(
     bool m_useValidationLayers,
     vk::raii::Context const& m_vkContext,
@@ -468,6 +482,7 @@ void VkEngine::init_descriptor_sets() {
         );
     }
 }
+[[nodiscard]]
 vk::raii::DescriptorPool make_descriptor_pool(
     vk::raii::Device const& m_vkDevice,
     u32 syncFrameCount
@@ -488,6 +503,7 @@ void VkEngine::init_descriptor_pool() {
     m_vkDescriptorPool = make_descriptor_pool(m_vkDevice, syncFrameCount);
 }
 
+[[nodiscard]]
 vk::raii::DescriptorSetLayout make_descriptor_set_layout(
     vk::raii::Device const& m_vkDevice
 ) {
@@ -615,7 +631,7 @@ void VkEngine::init_pipeline() {
     );
 }
 
-
+[[nodiscard]]
 std::vector<FrameData> make_inflightFrames(
     vk::raii::Device const& m_vkDevice,
     u32 frameCount,
@@ -674,269 +690,6 @@ void VkEngine::init_sync_structures() {
     }
 }
 
-void VkEngine::init() {
-    LOG_INFO("INITIALIZING ENGINE ({})", static_cast<void*>(this));
-    ASSERT(m_loadedEngine == nullptr);
-    m_loadedEngine = this;
-    try{
-        init_window();
-        init_vk_instance();
-        init_vk_surface();
-        init_vk_device_and_queue();
-        init_swapchain();
-        init_inflightFrames();
-        init_descriptor_set_layout();
-        init_buffers();  //  TODO: refactor to be like the others
-        init_pipeline();  //  TODO: refactor to be like the others
-        init_descriptor_pool();
-        init_descriptor_sets(); //  TODO: refactor to be like the others
-        init_sync_structures(); //  TODO: refactor to be like the others
-    }catch(vk::SystemError const& e){
-        LOG_FATAL("Failed to initialize vulkan: {}", e.what());
-    }
-}
-void VkEngine::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf){
-    // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
-    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::eViewport));
-    cmdBuf.setViewport(
-        0, 
-        dyn_get_viewport()
-    );
-
-    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::eScissor));
-    cmdBuf.setScissor(
-        0,
-        dyn_get_scissor()
-    );
-
-    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::ePolygonModeEXT));
-    cmdBuf.setPolygonModeEXT(
-        dyn_get_polymode()
-    );
-}
-// aka recordCommadBuffer in tutorial
-void VkEngine::record_commands_to_buffer(u32 imageIndex){
-    auto& cmdBuf = get_current_frame().commandBuffer;
-    auto const frame_idx = get_current_frame_index();
-    cmdBuf.begin({});
-    cmdBuf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        m_vkPipelineLayout,
-        0, 
-        *m_vkDescriptorSets[frame_idx],
-        nullptr
-    );
-    auto const swapchainImage = m_swapchain.images.at(imageIndex);
-
-    vk_util::transition_image_layout(
-        cmdBuf, swapchainImage, 
-        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
-        {},
-        vk::AccessFlagBits2::eColorAttachmentWrite,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,  
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput
-    );
-
-    auto clearColor = vk::ClearColorValue{.float32 = {{
-        std::abs(std::sin(m_frameCount / 120.0f)),
-        0.0f,
-        std::abs(std::sin(m_frameCount / 120.0f)),
-        1.0f
-        }}
-    };
-
-    auto attachmentInfo = vk::RenderingAttachmentInfo {
-        .imageView = m_swapchain.imageViews.at(imageIndex),
-        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = {clearColor},
-    };
-    auto renderingInfo = vk::RenderingInfo{
-        .renderArea{.offset={},.extent=m_swapchain.extent},
-        .layerCount = 1,
-    };
-    renderingInfo.setColorAttachments(attachmentInfo);
-
-    cmdBuf.beginRendering(renderingInfo);
-    cmdBuf.bindPipeline(
-        vk::PipelineBindPoint::eGraphics,
-        *m_vkPipeline
-    );
-    cmdBuf.bindVertexBuffers(0, *m_vertexBuffer, {0});
-    cmdBuf.bindIndexBuffer(*m_indexBuffer, 0, vtx_raw_data::vk_IndexType(vtx_raw_data::ccw_quad_indices));
-    set_dynamic_state(cmdBuf);
-
-    cmdBuf.drawIndexed(vtx_raw_data::idx_count(vtx_raw_data::ccw_quad_indices),1, 0,0,0);
-
-    cmdBuf.endRendering();
-    vk_util::transition_image_layout(
-        cmdBuf, swapchainImage, 
-        vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
-        vk::AccessFlagBits2::eColorAttachmentWrite,
-        {}, // must be eNone for ePresentSrcKHR
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,/* src stage mask*/
-        vk::PipelineStageFlagBits2::eBottomOfPipe
-    );
-
-    cmdBuf.end();
-}
-
-void VkEngine::update_uniforms(FrameData const& frame) {
-    auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
-    auto ubo = UniformBufferObject{
-        .model = glm::translate(glm::mat4(1.0f),glm::vec3{2.0f,2.0f, 4.0f}),
-        .view = m_cam.get_view_matrix(),
-        .proj = m_cam.get_proj_matrix(aspect),
-    };
-    // HACK: glm uses y up for clip space, vulkan uses y down. flip here
-    ubo.proj[1][1] *= -1; 
-    memcpy(frame.uniformBufferMappedMemory, &ubo,sizeof(ubo));
-
-}
-void VkEngine::draw() {
-    // We perform this early check here in order to prevent a resized framebuffer to present a previous image
-    if (m_framebufferResized){
-        m_framebufferResized = false;
-        recreate_swapchain();
-    }
-    auto& frame = get_current_frame();
-    // 1. wait for previous frame to signal the fence
-    auto fenceRV = m_vkDevice.waitForFences(*frame.fence, vk::True, numeric_max<u64>);
-    if (fenceRV != vk::Result::eSuccess){
-        LOG_FATAL("Failed to wait for fence");
-    }
-
-    // 2. Acquire the next image from the swapchain
-    auto [acquire_res, imageIndex] = m_swapchain.descriptor.acquireNextImage(
-        numeric_max<u64>,
-        *frame.presentCompleteSemaphore
-    );
-    if (acquire_res == vk::Result::eErrorOutOfDateKHR){
-        // only early return if we got no image at all, and thus didnt signal the semaphore.
-        // Else we get validation error on the semaphore
-        recreate_swapchain();
-        return;
-    }else{
-        ASSERT(acquire_res==vk::Result::eSuccess || acquire_res==vk::Result::eSuboptimalKHR);
-    }
-    // only reset if we acquired an image from the swapchain, else we early returned
-    update_uniforms(frame);
-    m_vkDevice.resetFences(*frame.fence);
-
-    auto & cmdBuf = frame.commandBuffer;
-    cmdBuf.reset();
-    record_commands_to_buffer(imageIndex);
-
-    auto waitDstStageMask = static_cast<vk::PipelineStageFlags>(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-    m_vkQueue.submit(
-        vk::SubmitInfo{}
-            .setCommandBuffers(*cmdBuf)
-            .setWaitSemaphores(*frame.presentCompleteSemaphore)
-            .setSignalSemaphores(*m_swapchain.renderFinishedSemaphores[imageIndex])
-            .setWaitDstStageMask(waitDstStageMask),
-        *frame.fence
-    );
-
-    auto const present_res = m_vkQueue.presentKHR(
-        vk::PresentInfoKHR{}
-            .setWaitSemaphores(*m_swapchain.renderFinishedSemaphores[imageIndex])
-            .setSwapchains(*m_swapchain.descriptor)
-            .setImageIndices(imageIndex)
-    );
-    if (   present_res == vk::Result::eSuboptimalKHR 
-        || present_res == vk::Result::eErrorOutOfDateKHR
-        || acquire_res == vk::Result::eSuboptimalKHR // since we ignore this in the previous check
-        || m_framebufferResized
-    ){
-        m_framebufferResized = false;
-        recreate_swapchain();
-    }else{
-        ASSERT(present_res==vk::Result::eSuccess);
-    }
-
-    m_frameCount++;
-}
-
-void VkEngine::handle_key_down(SDL_KeyboardEvent const& key_ev){
-    auto rotate_speed = f32{1.0f};
-    switch(key_ev.key){
-        case SDLK_T:{
-            m_vkPolygonMode = m_vkPolygonMode == vk::PolygonMode::eFill ? vk::PolygonMode::eLine : vk::PolygonMode::eFill;
-        } break;
-
-        case SDLK_LEFT:{
-            m_cam.rotate_left(rotate_speed);
-        } break;
-        case SDLK_RIGHT:{
-            m_cam.rotate_right(rotate_speed);
-        } break;
-        case SDLK_UP:{
-            m_cam.rotate_up(rotate_speed);
-        } break;
-        case SDLK_DOWN:{
-            m_cam.rotate_down(rotate_speed);
-        } break;
-        case SDLK_A:{
-            m_cam.move_left(0.1f);
-        } break;
-        case SDLK_D:{
-            m_cam.move_right(0.1f);
-        } break;
-        case SDLK_W:{
-            m_cam.move_forward(0.1f);
-            //m_camPos.z -= 0.1f;
-        } break;
-        case SDLK_S:{
-            m_cam.move_backward(0.1f);
-            //m_camPos.z += 0.1f;
-        } break;
-        case SDLK_Q:{
-            m_cam.move_up(0.1f);
-            //m_camPos.z += 0.1f;
-        } break;
-        case SDLK_E:{
-            m_cam.move_down(0.1f);
-            //m_camPos.z += 0.1f;
-        } break;
-    }
-
-    LOG_DBG("pos: {}",m_cam.pos);
-    LOG_DBG("origin: {}",m_cam.pos + m_cam.get_front());
-}
-void VkEngine::handle_inputs(){
-    SDL_Event e{};
-    while ((SDL_PollEvent(&e)) != 0) {
-        if (e.type == SDL_EVENT_QUIT) {
-            m_shouldStopRunning= true;
-        }
-        if (e.type == SDL_EVENT_WINDOW_MINIMIZED) {
-            m_shouldStopRendering = true;
-        }
-        if (e.type == SDL_EVENT_WINDOW_RESTORED) {
-            m_shouldStopRendering = false;
-        }
-        if (e.type == SDL_EVENT_WINDOW_RESIZED) {
-            m_framebufferResized = true;
-        }
-
-        if (e.type == SDL_EVENT_KEY_DOWN){
-            handle_key_down(e.key);
-        }
-    }
-}
-
-void VkEngine::run() {
-    using namespace std::chrono_literals;
-    while (!m_shouldStopRunning) {
-        handle_inputs();
-        if (m_shouldStopRendering) {
-            std::this_thread::sleep_for(100ms);
-            continue;
-        }
-        draw();
-    }
-}
 void VkEngine::cleanup() {
     if (is_initialized()) {
         m_vkDevice.waitIdle();
@@ -968,27 +721,8 @@ void VkEngine::cleanup() {
     m_loadedEngine = nullptr;
 }
 
-VkEngine& VkEngine::get_instance() { 
-    return *m_loadedEngine; 
-}
-bool VkEngine::is_initialized() { 
-    return m_window; 
-}
-
-u32 VkEngine::get_current_frame_index(){
-    return m_frameCount % syncFrameCount;
-}
-FrameData& VkEngine::get_current_frame() {
-    return m_inflightFrames.at(get_current_frame_index());
-}
 
 void VkEngine::cleanup_window() const noexcept{
     SDL_DestroyWindow(m_window);
 }
 
-[[nodiscard]]
-vk::Extent2D VkEngine::get_framebuffer_size() const noexcept{
-    int w{},h{};
-    SDL_GetWindowSizeInPixels(m_window, &w,&h);
-    return vk::Extent2D{st_cast<u32>(w),st_cast<u32>(h)};
-}

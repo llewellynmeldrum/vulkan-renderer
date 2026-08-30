@@ -1,3 +1,4 @@
+#include "SDL3/SDL_video.h"
 #include "vk_engine.hpp"
 #include <thread>
 void VkEngine::recreate_swapchain() {
@@ -33,4 +34,24 @@ void VkEngine::copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, 
     );
     // We wait to ensure the transfer happened
     m_vkQueue.waitIdle();
+}
+
+VkEngine& VkEngine::get_instance() { 
+    return *m_loadedEngine; 
+}
+bool VkEngine::is_initialized() { 
+    return m_window; 
+}
+
+u32 VkEngine::get_current_frame_index(){
+    return m_frameCount % syncFrameCount;
+}
+FrameData& VkEngine::get_current_frame() {
+    return m_inflightFrames.at(get_current_frame_index());
+}
+[[nodiscard]]
+vk::Extent2D VkEngine::get_framebuffer_size() const noexcept{
+    int w{},h{};
+    SDL_GetWindowSizeInPixels(m_window, &w,&h);
+    return vk::Extent2D{st_cast<u32>(w),st_cast<u32>(h)};
 }

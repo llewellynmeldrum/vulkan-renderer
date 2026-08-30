@@ -110,6 +110,7 @@ struct VkEngine {
     void recreate_swapchain();
     [[nodiscard]] 
     auto make_shader_module(std::span<const char> spirv_src);
+    [[nodiscard]]
     inline auto select_memory_type(u32 type_flags_required, vk::MemoryPropertyFlags prop_flags_required){
         auto device_memory_properties = m_vkPhysicalDevice.getMemoryProperties();
         u32 selected_mem_type_idx{numeric_max<u32>};
@@ -143,6 +144,7 @@ struct VkEngine {
         }
         return selected_mem_type_idx;
     }
+    [[nodiscard]]
     inline auto make_buffer( size_t size_bytes,  vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memFlags){
         auto buf = vk::raii::Buffer{
             m_vkDevice,
@@ -169,6 +171,7 @@ struct VkEngine {
 
         return std::pair{std::move(buf),std::move(memory)};
     }
+    [[nodiscard]]
     inline auto make_vertex_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
         return make_buffer(
             size_bytes,
@@ -176,6 +179,7 @@ struct VkEngine {
             vk::MemoryPropertyFlagBits::eDeviceLocal
         );
     }
+    [[nodiscard]]
     inline auto make_uniform_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
         return make_buffer(
             size_bytes,
@@ -184,6 +188,7 @@ struct VkEngine {
         );
 
     }
+    [[nodiscard]]
     inline auto make_index_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
         return make_buffer(
             size_bytes,
@@ -191,6 +196,7 @@ struct VkEngine {
             vk::MemoryPropertyFlagBits::eDeviceLocal
         );
     }
+    [[nodiscard]]
     inline auto make_staging_buffer( size_t size_bytes){
         return make_buffer(
             size_bytes,
