@@ -103,107 +103,12 @@ struct VkEngine {
     void init_descriptor_pool();
     void init_descriptor_sets();
     void init_inflightFrames();
+    void init_textures();
     void init_sync_structures();
 
     void update_uniforms(FrameData const& frame);
     void copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size);
     void recreate_swapchain();
-    [[nodiscard]] 
-    auto make_shader_module(std::span<const char> spirv_src);
-    [[nodiscard]]
-    inline auto select_memory_type(u32 type_flags_required, vk::MemoryPropertyFlags prop_flags_required){
-        auto device_memory_properties = m_vkPhysicalDevice.getMemoryProperties();
-        u32 selected_mem_type_idx{numeric_max<u32>};
-        for (u32 idx = 0 ; idx<device_memory_properties.memoryTypeCount; idx++){
-            auto const& memoryType  = device_memory_properties.memoryTypes[idx];
-            auto const& propertyFlags = memoryType.propertyFlags;
-
-            bool matches_filter = type_flags_required & (1 << idx);
-            bool matches_properties = (propertyFlags & prop_flags_required) == prop_flags_required;
-            if (!matches_filter){
- //               LOG_DBG("Memtype: [{}] does not match mem_type_filter",idx);
-            }
-            if (!matches_properties){
-//                LOG_DBG("Memtype: [{}]{} does not match property flags ({})",idx, vk::to_string(memoryType.propertyFlags),vk::to_string(prop_flags_required));
-            }
-            if (matches_filter && matches_properties){
-                selected_mem_type_idx = idx;
-                break;
-            }
-        }
-        if (selected_mem_type_idx == numeric_max<u32>) {
-            LOG_FATAL("Unable to find suitable memory type for buffer creation.");
-        }else{
-            auto const& memoryType  = device_memory_properties.memoryTypes[selected_mem_type_idx];
-            LOG_DBG(
-                "Selected Memtype: [{}]{} for ({})",
-                selected_mem_type_idx, 
-                vk::to_string(memoryType.propertyFlags),
-                vk::to_string(prop_flags_required)
-            );
-        }
-        return selected_mem_type_idx;
-    }
-    [[nodiscard]]
-    inline auto make_buffer( size_t size_bytes,  vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memFlags){
-        auto buf = vk::raii::Buffer{
-            m_vkDevice,
-            {
-                .size = size_bytes,
-                .usage = usage,
-                .sharingMode = vk::SharingMode::eExclusive,
-            },
-        };
-        auto mem_requirements = buf.getMemoryRequirements();
-        auto memType = select_memory_type(
-            mem_requirements.memoryTypeBits,
-            memFlags
-        );
-        auto memory = vk::raii::DeviceMemory{
-            m_vkDevice,
-            {
-                .allocationSize = mem_requirements.size,
-                .memoryTypeIndex = memType,
-            },
-        };
-        
-        buf.bindMemory(*memory, 0);
-
-        return std::pair{std::move(buf),std::move(memory)};
-    }
-    [[nodiscard]]
-    inline auto make_vertex_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
-        return make_buffer(
-            size_bytes,
-            vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-            vk::MemoryPropertyFlagBits::eDeviceLocal
-        );
-    }
-    [[nodiscard]]
-    inline auto make_uniform_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
-        return make_buffer(
-            size_bytes,
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eDeviceLocal
-        );
-
-    }
-    [[nodiscard]]
-    inline auto make_index_buffer( size_t size_bytes, vk::SharingMode sharing_mode ){
-        return make_buffer(
-            size_bytes,
-            vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-            vk::MemoryPropertyFlagBits::eDeviceLocal
-        );
-    }
-    [[nodiscard]]
-    inline auto make_staging_buffer( size_t size_bytes){
-        return make_buffer(
-            size_bytes,
-            vk::BufferUsageFlagBits::eTransferSrc,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-        );
-    }
     auto dyn_get_viewport() const{
         return vk::Viewport{
             0.0f,0.0f, // viewport position

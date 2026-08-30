@@ -1,6 +1,5 @@
 #include <thread>
 
-
 #include "sdl3_types.hpp"
 #include "glm_types.hpp"
 
@@ -15,6 +14,7 @@
 #include "vk_util.hpp"
 #include "vk_buffers.hpp"
 #include "vk_init_helpers.hpp"
+#include "vk_buffers_helpers.hpp"
 
 static char const* APP_NAME = "Test Window";
 
@@ -35,6 +35,7 @@ void VkEngine::init() {
         init_descriptor_pool();
         init_descriptor_sets(); //  TODO: refactor to be like the others
         init_sync_structures(); //  TODO: refactor to be like the others
+        init_textures(); //  TODO: refactor to be like the others
     }catch(vk::SystemError const& e){
         LOG_FATAL("Failed to initialize vulkan: {}", e.what());
     }
@@ -195,7 +196,7 @@ void VkEngine::init_buffers() {
     auto [
         vtxStagingBuf,
         vtxStagingMem
-    ] = make_staging_buffer(vtx_src.size_bytes());
+    ] = make_staging_buffer(m_vkDevice, m_vkPhysicalDevice, vtx_src.size_bytes());
     void *vtx_staging_data = vtxStagingMem.mapMemory(0,vtx_src.size_bytes());
     std::memcpy(vtx_staging_data, vtx_src.data(), vtx_src.size_bytes());
     vtxStagingMem.unmapMemory();
@@ -204,7 +205,7 @@ void VkEngine::init_buffers() {
     std::tie(
         m_vertexBuffer,
         m_vertexBufferMemory
-    ) = make_vertex_buffer(vtx_src.size_bytes(), vk::SharingMode::eExclusive);
+    ) = make_vertex_buffer(m_vkDevice, m_vkPhysicalDevice, vtx_src.size_bytes(), vk::SharingMode::eExclusive);
     copy_buffer(vtxStagingBuf,m_vertexBuffer,vtx_src.size_bytes());
     set_vk_dbg_name(m_vkDevice, m_vertexBuffer, "Vertex buffer");
 
@@ -216,7 +217,7 @@ void VkEngine::init_buffers() {
     auto [
         idxStagingBuf, 
         idxStagingMem
-    ] = make_staging_buffer(idx_src.size_bytes());
+    ] = make_staging_buffer(m_vkDevice, m_vkPhysicalDevice, idx_src.size_bytes());
     void *idx_staging_data = idxStagingMem.mapMemory(0,idx_src.size_bytes());
     std::memcpy(idx_staging_data, idx_src.data(), idx_src.size_bytes());
     idxStagingMem.unmapMemory();
@@ -224,7 +225,7 @@ void VkEngine::init_buffers() {
     std::tie(
         m_indexBuffer,
         m_indexBufferMemory
-    ) = make_index_buffer(idx_src.size_bytes(), vk::SharingMode::eExclusive);
+    ) = make_index_buffer(m_vkDevice, m_vkPhysicalDevice, idx_src.size_bytes(), vk::SharingMode::eExclusive);
 
     copy_buffer(idxStagingBuf,m_indexBuffer,idx_src.size_bytes());
     set_vk_dbg_name(m_vkDevice, m_vertexBuffer, "Index buffer");
@@ -236,7 +237,7 @@ void VkEngine::init_buffers() {
         std::tie(
             frame.uniformBuffer,
             frame.uniformBufferMemory 
-        ) = make_uniform_buffer(bufSize,vk::SharingMode::eExclusive);
+        ) = make_uniform_buffer(m_vkDevice, m_vkPhysicalDevice, bufSize,vk::SharingMode::eExclusive);
         frame.uniformBufferMappedMemory = frame.uniformBufferMemory.mapMemory(0,bufSize);
     }
 
@@ -443,16 +444,6 @@ void VkEngine::init_vk_instance(){
     m_vkDebugMessenger = std::move(ctx.m_vkDebugMessenger);
 }
 
-[[nodiscard]] auto VkEngine::make_shader_module(std::span<const char> spirv_src){
-    ASSERT(spirv_src.size() == spirv_src.size_bytes());
-    return vk::raii::ShaderModule{
-        m_vkDevice,
-        vk::ShaderModuleCreateInfo{
-            .codeSize = spirv_src.size(),
-            .pCode = reinterpret_cast<u32 const*>(spirv_src.data()),
-        },
-    };
-}
 void VkEngine::init_descriptor_sets() {
     std::array<vk::DescriptorSetLayout, syncFrameCount> layouts{}; 
     layouts.fill(m_vkDescriptorSetLayout);
@@ -527,9 +518,19 @@ void VkEngine::init_descriptor_set_layout() {
 }
 
 
+[[nodiscard]] auto make_shader_module(vk::raii::Device const& m_vkDevice, std::span<const char> spirv_src){
+    ASSERT(spirv_src.size() == spirv_src.size_bytes());
+    return vk::raii::ShaderModule{
+        m_vkDevice,
+        vk::ShaderModuleCreateInfo{
+            .codeSize = spirv_src.size(),
+            .pCode = reinterpret_cast<u32 const*>(spirv_src.data()),
+        },
+    };
+}
 void VkEngine::init_pipeline() {
     auto shader_src = read_file_contents("shaders/slang.spv");
-    auto shader_module = make_shader_module(shader_src);
+    auto shader_module = make_shader_module(m_vkDevice, shader_src);
 
     auto vtxStageInfo = vk::PipelineShaderStageCreateInfo{}
         .setStage(vk::ShaderStageFlagBits::eVertex)
@@ -689,40 +690,7 @@ void VkEngine::init_sync_structures() {
         frame_idx++;
     }
 }
-
-void VkEngine::cleanup() {
-    if (is_initialized()) {
-        m_vkDevice.waitIdle();
-
-        m_swapchain = Swapchain{};
-        for (auto& frame: m_inflightFrames){
-            frame = FrameData{};
-        }
-        m_vkQueue.clear();
-        m_vkDescriptorSetLayout.clear();
-        m_vkPipelineLayout.clear();
-        m_vkPipeline.clear();
-
-        m_vertexBuffer.clear();
-        m_vertexBufferMemory.clear();
-
-        m_vkDescriptorSets.clear();
-        m_vkDescriptorPool.clear();
-
-        m_indexBuffer.clear();
-        m_indexBufferMemory.clear();
-
-        m_vkDevice.clear();
-        m_vkPhysicalDevice.clear();
-        m_vkSurface.clear();
-        // this cant be done here, shouldnt it happen after destruction of raii stuff?
-        m_window = nullptr;
-    }
-    m_loadedEngine = nullptr;
+void VkEngine::init_textures() {
 }
 
-
-void VkEngine::cleanup_window() const noexcept{
-    SDL_DestroyWindow(m_window);
-}
 
