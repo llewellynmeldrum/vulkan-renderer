@@ -8,6 +8,9 @@
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
+
+#include "vk_debug.hpp"
+
 FWD_DECL_STRUCT(SDL_Window);
 FWD_DECL_STRUCT(SDL_KeyboardEvent);
 struct VkEngine {
@@ -17,15 +20,15 @@ struct VkEngine {
     // On a display with HiDPI (eg apple retina), the logical size will always be `x` times smaller than the 
     // 'pixel size', where `x` is the HiDPI pixel ratio.
     static constexpr vk::Extent2D m_windowLogicalSize{800, 600};
+    static constexpr u32 API_VER = vk::ApiVersion13;
+
+
     vk::Extent2D get_framebuffer_size() const noexcept;
     static constexpr bool m_useValidationLayers{true};
 
-    VkEngine() {
-        init(); 
-    }
-    ~VkEngine() {
-        cleanup(); 
-    }
+    VkEngine() { init(); }
+    ~VkEngine() { cleanup(); }
+
     VkEngine* m_loadedEngine{};
 
     size_t m_frameCount{};
@@ -48,7 +51,7 @@ struct VkEngine {
 
     Swapchain m_swapchain{};
 
-    std::array<FrameData, syncFrameCount> m_inflightFrames{};
+    std::vector<FrameData> m_inflightFrames{};
 
     vk::raii::DescriptorSetLayout m_vkDescriptorSetLayout{nullptr};
     vk::raii::DescriptorPool m_vkDescriptorPool{nullptr};
@@ -90,14 +93,16 @@ struct VkEngine {
 
   private:
     void init_window();
-    void init_vulkan();
+    void init_vk_instance();
+    void init_vk_surface();
+    void init_vk_device_and_queue();
     void init_buffers();
     void init_swapchain();
     void init_pipeline();
     void init_descriptor_set_layout();
     void init_descriptor_pool();
     void init_descriptor_sets();
-    void init_commands();
+    void init_inflightFrames();
     void init_sync_structures();
 
     void update_uniforms(FrameData const& frame);
@@ -210,18 +215,5 @@ struct VkEngine {
         return m_vkPolygonMode;
     }
 
-    // required to extend the lifetime of the object names we use for debugging
-    std::vector<std::string> objectNames;
-    template <typename T>
-    void set_vkobject_dbg_name(T const& object, std::string name_in) {
-        vk::DebugUtilsObjectNameInfoEXT nameInfo;
-        auto name = objectNames.emplace_back(std::move(name_in));
-        
-        nameInfo.objectType   = T::objectType; 
-        nameInfo.objectHandle = reinterpret_cast<uint64_t>(get_c_handle(object));
-        nameInfo.pObjectName  = name.c_str(); // should live for as long as the engine does
-
-        m_vkDevice.setDebugUtilsObjectNameEXT(nameInfo);
-    } 
     void cleanup_window() const noexcept;
 };

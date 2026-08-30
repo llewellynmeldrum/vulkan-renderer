@@ -1,18 +1,9 @@
-
-
 #include <thread>
+
 #include <vulkan/vulkan_raii.hpp>
 
-#include "SDL3/SDL.h"
-#include "SDL3/SDL_vulkan.h"
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL_init.h"
-#include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_oldnames.h"
-#include "SDL3/SDL_stdinc.h"
-#include "SDL3/SDL_video.h"
-
-#include "glm/gtc/matrix_transform.hpp"
+#include "sdl3_types.hpp"
+#include "glm_types.hpp"
 
 #include "format_specs.hpp"
 #include "file_io.hpp"
@@ -25,26 +16,12 @@
 #include "vk_util.hpp"
 #include "vk_buffers.hpp"
 #include "vk_init_helpers.hpp"
-#include "vulkan/vulkan.hpp"
 
 static char const* APP_NAME = "Test Window";
 
 
-void VkEngine::recreate_swapchain() {
-    using namespace std::chrono_literals;
-    auto framebuffer_sz = get_framebuffer_size();
-    while (framebuffer_sz.width == 0 || framebuffer_sz.height == 0){
-        // window is minimized 
-        std::this_thread::sleep_for(10ms);
-        handle_inputs();
-        framebuffer_sz = get_framebuffer_size();
-    }
-    m_vkDevice.waitIdle();
-    m_swapchain.descriptor.clear();
-    init_swapchain();
-}
-
-void VkEngine::init_window() {
+SDL_Window* make_window(vk::Extent2D m_windowLogicalSize){
+    SDL_Window* m_window{nullptr};
     static constexpr auto init_flags = 
         SDL_INIT_VIDEO
         | SDL_INIT_EVENTS;
@@ -67,10 +44,120 @@ void VkEngine::init_window() {
         LOG_ERROR("Failed to init window : {}", SDL_GetError());
         LOG_EXIT(1);
     }
+    return m_window;
 }
 
+void VkEngine::init_window() {
+    m_window = make_window(m_windowLogicalSize);
+}
+
+Swapchain make_swapchain(
+    SwapchainSettings in
+){
+    auto fmts = in.physical_device.getSurfaceFormatsKHR(in.surface);
+    ASSERT(fmts.size() > 0);
+
+    auto preferred = vk::SurfaceFormatKHR{in.format,in.colorSpace};
+    auto surface_supports_fmt = std::ranges::contains(fmts, preferred) ;
+    auto image_fmt = 
+        surface_supports_fmt
+        ? *(std::ranges::find(fmts,preferred))
+        : fmts.front();
+    if (!surface_supports_fmt){
+        LOG_WARN("Surface does not support desired format ({}/{}), falling back to {}/{}.",
+                 vk::to_string(in.format),vk::to_string(in.format),
+                 vk::to_string(image_fmt.format),vk::to_string(image_fmt.format)
+                 );
+    }
+
+    auto modes = in.physical_device.getSurfacePresentModesKHR(in.surface);
+    bool surface_supports_present_mode = std::ranges::contains(modes,in.present_mode);
+    auto present_mode = surface_supports_present_mode
+            ? in.present_mode
+            : vk::PresentModeKHR::eFifo; // only one guaranteed by the spec
+    if (!surface_supports_present_mode){
+        LOG_WARN("Surface does not support desired present mode({}), falling back to {}." ,
+                 vk::to_string(in.present_mode),
+                 vk::to_string(vk::PresentModeKHR::eFifo));
+    }
+
+    auto caps = in.physical_device.getSurfaceCapabilitiesKHR(in.surface);
+    auto extent = in.extent_px;
+    static constexpr auto UNDEFINED_EXTENT {numeric_max<u32>};
+    bool surface_has_fixed_extents = caps.currentExtent.width != UNDEFINED_EXTENT;
+    if (!surface_has_fixed_extents){
+        extent=in.extent_px;
+        auto const max = caps.maxImageExtent;
+        auto const min = caps.minImageExtent;
+        extent.width = std::clamp(extent.width, min.width, max.width);
+        extent.height = std::clamp(extent.height, min.height, max.height);
+    }
+    auto image_count = caps.minImageCount+1;
+    if (caps.maxImageCount > 0) { // 0 means "no upper bound" apparently
+        image_count = std::min(image_count, caps.maxImageCount);
+    }
+    LOG_DBG("caps.maxImageCount:{}",caps.maxImageCount);
+    LOG_DBG("caps.minImageCount:{}",caps.minImageCount);
+    LOG_DBG("image_count:{}",image_count);
+    // next is checking usage flags
+    if ((caps.supportedUsageFlags & in.image_usage_flags) != in.image_usage_flags){
+        LOG_FATAL("Surface does not support desired image usage {} (supports {})",
+                  vk::to_string(in.image_usage_flags),
+                  vk::to_string(caps.supportedUsageFlags)
+                  );
+    }
+    auto swapchain = Swapchain{
+        .descriptor = vk::raii::SwapchainKHR{in.device,
+            vk::SwapchainCreateInfoKHR{
+                .surface = *in.surface,
+                .minImageCount = image_count,
+                .imageFormat = image_fmt.format,
+                .imageColorSpace = image_fmt.colorSpace,
+                .imageExtent = extent,
+                .imageArrayLayers = 1,
+                .imageUsage = in.image_usage_flags,
+                .imageSharingMode = vk::SharingMode::eExclusive,
+                .preTransform = caps.currentTransform,
+                .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+                .presentMode = present_mode,
+                .clipped = vk::True,
+            },
+        },
+        .imageFormat = image_fmt.format,
+        .extent = extent,
+    };
+
+    swapchain.images = swapchain.descriptor.getImages();
+    ASSERT(swapchain.images.size() > 0);
+
+    swapchain.imageViews.reserve(swapchain.images.size());
+    for (auto const& image: swapchain.images){
+        swapchain.imageViews.emplace_back(
+            in.device,
+            vk::ImageViewCreateInfo{
+                .image = image,
+                .viewType = vk::ImageViewType::e2D,
+                .format = swapchain.imageFormat,
+                .subresourceRange = {
+                    .aspectMask = vk::ImageAspectFlagBits::eColor,
+                    .levelCount = 1,
+                    .layerCount = 1,
+                },
+            }
+        );
+        swapchain.renderFinishedSemaphores.emplace_back(
+            in.device,
+            vk::SemaphoreCreateInfo{}
+        );
+    }
+    int idx = 0;
+    for (const auto& rend_sem: swapchain.renderFinishedSemaphores){
+        set_vk_dbg_name(in.device, rend_sem, std::format("({}) render sem", idx++));
+    }
+    return swapchain;
+}
 void VkEngine::init_swapchain() {
-    m_swapchain = Swapchain::make(
+    m_swapchain = make_swapchain(
         SwapchainSettings{
             .physical_device = m_vkPhysicalDevice,
             .device = m_vkDevice,
@@ -78,34 +165,9 @@ void VkEngine::init_swapchain() {
             .extent_px = get_framebuffer_size(),
         }
     );
-    int idx = 0;
-    for (const auto& rend_sem: m_swapchain.renderFinishedSemaphores){
-        set_vkobject_dbg_name(rend_sem, std::format("({}) render sem", idx));
-        idx++;
-    }
+    
 }
 
-void VkEngine::copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size){
-    auto allocInfo = vk::CommandBufferAllocateInfo{
-        .commandPool = *get_current_frame().commandPool,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1,
-    };
-
-    auto cmdCopyBuf = std::move(m_vkDevice.allocateCommandBuffers(allocInfo).front());
-
-    cmdCopyBuf.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-    cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=0, .dstOffset = 0, .size=size});
-    cmdCopyBuf.end();
-
-    m_vkQueue.submit(
-        vk::SubmitInfo{}
-            .setCommandBuffers(*cmdCopyBuf),
-        nullptr
-    );
-    // We wait to ensure the transfer happened
-    m_vkQueue.waitIdle();
-}
 
 void VkEngine::init_buffers() {
     // VERTEX BUFFER
@@ -124,7 +186,7 @@ void VkEngine::init_buffers() {
         m_vertexBufferMemory
     ) = make_vertex_buffer(vtx_src.size_bytes(), vk::SharingMode::eExclusive);
     copy_buffer(vtxStagingBuf,m_vertexBuffer,vtx_src.size_bytes());
-    set_vkobject_dbg_name(m_vertexBuffer, "Vertex buffer");
+    set_vk_dbg_name(m_vkDevice, m_vertexBuffer, "Vertex buffer");
 
 
 
@@ -145,7 +207,7 @@ void VkEngine::init_buffers() {
     ) = make_index_buffer(idx_src.size_bytes(), vk::SharingMode::eExclusive);
 
     copy_buffer(idxStagingBuf,m_indexBuffer,idx_src.size_bytes());
-    set_vkobject_dbg_name(m_vertexBuffer, "Index buffer");
+    set_vk_dbg_name(m_vkDevice, m_vertexBuffer, "Index buffer");
 
 
     // UNIFORM BUFFERS
@@ -159,12 +221,145 @@ void VkEngine::init_buffers() {
     }
 
 }
-void VkEngine::init_vulkan() try {
-    static constexpr auto API_VER = vk::ApiVersion13;
-    constexpr auto EXT_MOLTENVK_FIX = "VK_KHR_portability_subset";
-    constexpr auto VALIDATION_LAYER = "VK_LAYER_KHRONOS_validation";
-    // sdl requires some extensions for its windowing stuff
+// consumes: 
+// - m_vkInstance
+// produces: 
+// - m_vkPhysicalDevice
+// - m_vkDevice
+// - m_vkQueue
+// - m_vkQueueFamily
+//
+struct DeviceQueueContext{
+    vk::raii::PhysicalDevice m_vkPhysicalDevice{nullptr};
+    vk::raii::Device         m_vkDevice{nullptr};
+    vk::raii::Queue          m_vkQueue{nullptr};
+    u32                      m_vkQueueFamily{};
+};
+DeviceQueueContext make_vk_device_and_queue(
+    vk::raii::Instance const& m_vkInstance,
+    vk::raii::SurfaceKHR const& m_vkSurface,
+    u32 API_VER
+){
+    // NOTE: Instance extensions modify global behaviour BEFORE a device is selected,
+    // whereas DEVICE extensions modify the behaviour of a specific vk::Device.
+
+    DeviceQueueContext ctx{};
+    // Configure Device extensions
+    auto device_extensions = std::vector<char const*>{};
+    // These extensions are required. We cannot function properly without them.
+    static constexpr auto required_device_extensions = std::array{
+        vk::KHRSwapchainExtensionName,
+        vk::EXTExtendedDynamicState3ExtensionName,
+    };
+
+    // iterate over all physical devices listed by driver
+    for (auto && physical_device : m_vkInstance.enumeratePhysicalDevices()){
+        // skip if device doesnt support expected api version
+        auto device_api_ver = physical_device.getProperties().apiVersion;
+        if (device_api_ver < API_VER) continue;
+
+        auto const supported_extensions = physical_device.enumerateDeviceExtensionProperties();
+        bool device_supports_required_extensions {true};
+        for (auto const& required_ext: required_device_extensions){
+            if (supports_extension(supported_extensions,required_ext)){
+                device_extensions.push_back(required_ext); 
+            }else{
+                device_supports_required_extensions = false;
+                break;
+            }
+        }
+        if (!device_supports_required_extensions){
+            continue;
+        }
+        static constexpr auto EXT_MOLTENVK_FIX = "VK_KHR_portability_subset";
+        // 'VK_KHR_portability_subset must be enabled if physical device supports it.'
+        if (supports_extension(supported_extensions,EXT_MOLTENVK_FIX)){
+            device_extensions.push_back(EXT_MOLTENVK_FIX);
+        }
+
+        auto family = find_matching_queue_family(
+            physical_device, 
+            [&](u32 idx){
+                return physical_device.getSurfaceSupportKHR(idx,m_vkSurface) == vk::True;
+            }
+        );
+        if (!family) continue; // no matching queue family on the device
+
+        auto queue_prio = 1.0f;
+        auto queue_create_info = vk::DeviceQueueCreateInfo{}
+            .setQueueFamilyIndex(*family)
+            .setQueueCount(1)
+            .setQueuePriorities(queue_prio)
+        ;
+
+        
+        auto enabled_features = enabled_physical_device_features();
+        try {
+            ctx.m_vkDevice = vk::raii::Device{
+                physical_device,
+                vk::DeviceCreateInfo{}
+                    .setPNext(&enabled_features.get<vk::PhysicalDeviceFeatures2>())
+                    .setQueueCreateInfos(queue_create_info)
+                    .setPEnabledExtensionNames(device_extensions)
+            };
+        } catch (vk::FeatureNotPresentError e){
+            LOG_FATAL("PD {} is missing a feature: {}", get_physical_dev_name(physical_device),e.what());
+            continue;
+        }
+
+        ctx.m_vkPhysicalDevice = std::move(physical_device);
+        ctx.m_vkQueueFamily = *family;
+        break;
+    }
+
+    if (!*ctx.m_vkPhysicalDevice){
+        LOG_FATAL("Unable to select a physical device! Driver listed {}, none matched",//
+                  m_vkInstance.enumeratePhysicalDevices().size());
+    }else{
+        LOG_INFO("Device created, PD selected: {}", get_physical_dev_name(ctx.m_vkPhysicalDevice));
+    }
+
+    ctx.m_vkQueue = ctx.m_vkDevice.getQueue(ctx.m_vkQueueFamily, 0);
+    return ctx;
+}
+
+void VkEngine::init_vk_device_and_queue(){
+    auto ctx = make_vk_device_and_queue(m_vkInstance,m_vkSurface,API_VER);
+    m_vkPhysicalDevice = std::move(ctx.m_vkPhysicalDevice);
+	m_vkDevice = std::move(ctx.m_vkDevice);
+	m_vkQueue = std::move(ctx.m_vkQueue);
+	m_vkQueueFamily = std::move(ctx.m_vkQueueFamily);
+}
+
+auto make_vk_surface(
+    vk::raii::Instance const& instance,
+    SDL_Window* window
+){
+    ASSERT(window);
+    // Have SDL create the surface given our instance we just setup 
+    auto raw_surface = VkSurfaceKHR{};
+    if (!SDL_Vulkan_CreateSurface(window, get_c_handle(instance), nullptr,
+                                  &raw_surface)) {
+        LOG_FATAL("Failure in {}(): {}", "SDL_Vulkan_CreateSurface", SDL_GetError());
+    }
+    return vk::raii::SurfaceKHR{instance, raw_surface};
+}
+void VkEngine::init_vk_surface(){
+    m_vkSurface = make_vk_surface(m_vkInstance, m_window);
+}
+
+struct VkInstanceContext{
+    vk::raii::Instance m_vkInstance{nullptr};
+    vk::raii::DebugUtilsMessengerEXT m_vkDebugMessenger {nullptr};
     
+};
+VkInstanceContext make_vk_instance(
+    bool m_useValidationLayers,
+    vk::raii::Context const& m_vkContext,
+    u32 API_VER
+){
+    // sdl requires some extensions for its windowing stuff
+    auto ctx = VkInstanceContext{};
     u32 ext_count{};
     auto const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&ext_count);
     if (!sdl_extensions){
@@ -191,6 +386,7 @@ void VkEngine::init_vulkan() try {
         instanceFlags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
     }
 
+    constexpr auto VALIDATION_LAYER = "VK_LAYER_KHRONOS_validation";
     if (m_useValidationLayers){
         appLayers.push_back(VALIDATION_LAYER);
         instanceExtensions.push_back(vk::EXTDebugUtilsExtensionName);
@@ -213,119 +409,25 @@ void VkEngine::init_vulkan() try {
         .pfnUserCallback = vk_debug_callback,
     };
 
-    m_vkInstance = vk::raii::Instance{
+    ctx.m_vkInstance = vk::raii::Instance{
         m_vkContext,
-        vk::InstanceCreateInfo{
-            // without this pnext, vulkan cannot report errors to the debug extension during instance creation
-            .pNext = m_useValidationLayers ? &instanceDebugInfo : nullptr,
-            .flags = instanceFlags,
-            .pApplicationInfo = &appInfo,
-
-            .enabledLayerCount = static_cast<u32>(appLayers.size()),
-            .ppEnabledLayerNames = appLayers.data(),
-
-            .enabledExtensionCount = static_cast<u32>(instanceExtensions.size()),
-            .ppEnabledExtensionNames = instanceExtensions.data(),
-
-        },
+        vk::InstanceCreateInfo{}
+            .setPNext(m_useValidationLayers ? &instanceDebugInfo : nullptr)
+            .setFlags(instanceFlags)
+            .setPApplicationInfo(&appInfo)
+            .setPEnabledLayerNames(appLayers)
+            .setPEnabledExtensionNames(instanceExtensions)
     };
-
     if (m_useValidationLayers){
-        m_vkDebugMessenger = vk::raii::DebugUtilsMessengerEXT{m_vkInstance, instanceDebugInfo};
+        ctx.m_vkDebugMessenger = vk::raii::DebugUtilsMessengerEXT{ctx.m_vkInstance, instanceDebugInfo};
     }
-    ASSERT(m_window);
-
-    // Have SDL create the surface given our instance we just setup 
-    auto raw_surface = VkSurfaceKHR{};
-    if (!SDL_Vulkan_CreateSurface(m_window, get_c_handle(m_vkInstance), nullptr,
-                                  &raw_surface)) {
-        LOG_FATAL("Failure in {}(): {}", "SDL_Vulkan_CreateSurface", SDL_GetError());
-    }
-    m_vkSurface = vk::raii::SurfaceKHR{m_vkInstance, raw_surface};
-
-    // NOTE: Instance extensions modify global behaviour BEFORE a device is selected,
-    // whereas DEVICE extensions modify the behaviour of a specific vk::Device.
-    // Configure Device extensions
-    auto device_extensions = std::vector<char const*>{};
-    // These extensions are required, and will be skipped if they are not found
-    static constexpr auto required_device_extensions = std::array{
-        vk::KHRSwapchainExtensionName,
-        vk::EXTExtendedDynamicState3ExtensionName,
-    };
-
-    // iterate over all physical devices listed by driver
-    for (auto const& physical_device : m_vkInstance.enumeratePhysicalDevices()){
-        // skip if device doesnt support expected api version
-        auto device_api_ver = physical_device.getProperties().apiVersion;
-        if (device_api_ver < API_VER) continue;
-
-        auto const supported_extensions = physical_device.enumerateDeviceExtensionProperties();
-        bool device_supports_required_extensions {true};
-        for (auto const& required_ext: required_device_extensions){
-            if (supports_extension(supported_extensions,required_ext)){
-                device_extensions.push_back(required_ext); 
-            }else{
-                device_supports_required_extensions = false;
-                break;
-            }
-        }
-        if (!device_supports_required_extensions){
-            continue;
-        }
-
-        auto family = get_pd_queue_family(
-            physical_device, 
-            [physical_device, this](u32 idx){
-                return physical_device.getSurfaceSupportKHR(idx,m_vkSurface) == vk::True;
-            }
-        );
-        if (!family) continue; // no matching queue family on the device
-        
-
-        // 'VK_KHR_portability_subset must be enabled if physical device supports it.'
-        if (supports_extension(supported_extensions,EXT_MOLTENVK_FIX)){
-            device_extensions.push_back(EXT_MOLTENVK_FIX);
-        }
-        auto queue_prio = 1.0f;
-        auto queue_info = vk::DeviceQueueCreateInfo{
-            .queueFamilyIndex = m_vkQueueFamily,
-            .queueCount = 1,
-        };
-        queue_info.setQueuePriorities(queue_prio);
-
-        
-        auto enabled_features = enabled_physical_device_features();
-        try {
-            auto deviceCreateInfo= vk::DeviceCreateInfo{
-                .pNext = &enabled_features.get<vk::PhysicalDeviceFeatures2>(),
-            };
-            deviceCreateInfo.setQueueCreateInfos(queue_info);
-            deviceCreateInfo.setPEnabledExtensionNames(device_extensions);
-            m_vkDevice = vk::raii::Device{
-                physical_device,
-                deviceCreateInfo,
-            };
-        } catch (vk::FeatureNotPresentError e){
-            LOG_FATAL("PD {} is missing a feature: {}",get_physical_dev_name(physical_device),e.what());
-            continue;
-        }
-
-        m_vkPhysicalDevice = std::move(physical_device);
-        m_vkQueueFamily = *family;
-        break;
-    }
-    if (!*m_vkPhysicalDevice){
-        LOG_FATAL("Unable to select a physical device! Driver listed {}, none matched",//
-                  m_vkInstance.enumeratePhysicalDevices().size());
-    }else{
-        LOG_INFO("Device created, PD selected: {}", get_physical_dev_name(m_vkPhysicalDevice));
-    }
-
-    m_vkQueue = m_vkDevice.getQueue(m_vkQueueFamily, 0);
-} catch(vk::SystemError const& e){
-    LOG_FATAL("Failed to initialize vulkan: {}", e.what());
+    return ctx;
 }
-
+void VkEngine::init_vk_instance(){
+    auto ctx = make_vk_instance(m_useValidationLayers, m_vkContext, API_VER);
+    m_vkInstance = std::move(ctx.m_vkInstance);
+    m_vkDebugMessenger = std::move(ctx.m_vkDebugMessenger);
+}
 
 [[nodiscard]] auto VkEngine::make_shader_module(std::span<const char> spirv_src){
     ASSERT(spirv_src.size() == spirv_src.size_bytes());
@@ -337,9 +439,6 @@ void VkEngine::init_vulkan() try {
         },
     };
 }
-// the inputs to a pipeline are roughly:
-// -> Which shader stages will it use, and of which file
-//
 void VkEngine::init_descriptor_sets() {
     std::array<vk::DescriptorSetLayout, syncFrameCount> layouts{}; 
     layouts.fill(m_vkDescriptorSetLayout);
@@ -369,12 +468,15 @@ void VkEngine::init_descriptor_sets() {
         );
     }
 }
-void VkEngine::init_descriptor_pool() {
+vk::raii::DescriptorPool make_descriptor_pool(
+    vk::raii::Device const& m_vkDevice,
+    u32 syncFrameCount
+){
     auto poolSizes = vk::DescriptorPoolSize{}
         .setType(vk::DescriptorType::eUniformBuffer)
         .setDescriptorCount(syncFrameCount)
     ;
-    m_vkDescriptorPool = vk::raii::DescriptorPool{
+    return vk::raii::DescriptorPool{
         m_vkDevice,
         vk::DescriptorPoolCreateInfo{}
             .setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet)
@@ -382,9 +484,13 @@ void VkEngine::init_descriptor_pool() {
             .setPoolSizes(poolSizes)
     };
 }
+void VkEngine::init_descriptor_pool() {
+    m_vkDescriptorPool = make_descriptor_pool(m_vkDevice, syncFrameCount);
+}
 
-void VkEngine::init_descriptor_set_layout() {
-
+vk::raii::DescriptorSetLayout make_descriptor_set_layout(
+    vk::raii::Device const& m_vkDevice
+) {
     // Descriptor set bindings all combine into a single desciptor set layout.
     auto uboLayoutBinding = vk::DescriptorSetLayoutBinding{}
         .setBinding(0)
@@ -393,13 +499,17 @@ void VkEngine::init_descriptor_set_layout() {
         .setStageFlags(vk::ShaderStageFlagBits::eVertex)
     ;
 
-    m_vkDescriptorSetLayout = vk::raii::DescriptorSetLayout{
+    return vk::raii::DescriptorSetLayout{
         m_vkDevice, 
         vk::DescriptorSetLayoutCreateInfo{}
             .setBindingCount(1)
             .setBindings(uboLayoutBinding)
     };
 }
+void VkEngine::init_descriptor_set_layout() {
+    m_vkDescriptorSetLayout = make_descriptor_set_layout(m_vkDevice);
+}
+
 
 void VkEngine::init_pipeline() {
     auto shader_src = read_file_contents("shaders/slang.spv");
@@ -505,7 +615,14 @@ void VkEngine::init_pipeline() {
     );
 }
 
-void VkEngine::init_commands() {
+
+std::vector<FrameData> make_inflightFrames(
+    vk::raii::Device const& m_vkDevice,
+    u32 frameCount,
+    u32 m_vkQueueFamily
+) {
+    std::vector<FrameData> m_inflightFrames{}; 
+    m_inflightFrames.resize(frameCount);
     for (auto& frame : m_inflightFrames){
         frame.commandPool = vk::raii::CommandPool{
             m_vkDevice,
@@ -530,7 +647,10 @@ void VkEngine::init_commands() {
         frame.commandBuffer = std::move(buffers.at(0));
     }
 
-
+    return m_inflightFrames;
+}
+void VkEngine::init_inflightFrames() {
+    m_inflightFrames = make_inflightFrames(m_vkDevice,syncFrameCount, m_vkQueueFamily);
 }
 
 void VkEngine::init_sync_structures() {
@@ -543,13 +663,13 @@ void VkEngine::init_sync_structures() {
                 .flags = vk::FenceCreateFlagBits::eSignaled,
             },
         };
-        set_vkobject_dbg_name(frame.fence, std::format("(Frame {}) fence", frame_idx));
+        set_vk_dbg_name(m_vkDevice, frame.fence, std::format("(Frame {}) fence", frame_idx));
 
         frame.presentCompleteSemaphore = vk::raii::Semaphore{
             m_vkDevice,
             vk::SemaphoreCreateInfo{ }
         };
-        set_vkobject_dbg_name(frame.presentCompleteSemaphore, std::format("(Frame {}) present-complete sem", frame_idx));
+        set_vk_dbg_name(m_vkDevice, frame.presentCompleteSemaphore, std::format("(Frame {}) present-complete sem", frame_idx));
         frame_idx++;
     }
 }
@@ -558,16 +678,22 @@ void VkEngine::init() {
     LOG_INFO("INITIALIZING ENGINE ({})", static_cast<void*>(this));
     ASSERT(m_loadedEngine == nullptr);
     m_loadedEngine = this;
-    init_window();
-    init_vulkan();
-    init_swapchain();
-    init_commands();
-    init_descriptor_set_layout();
-    init_buffers(); // might need to move before init_pipeline
-    init_pipeline();
-    init_descriptor_pool();
-    init_descriptor_sets();
-    init_sync_structures();
+    try{
+        init_window();
+        init_vk_instance();
+        init_vk_surface();
+        init_vk_device_and_queue();
+        init_swapchain();
+        init_inflightFrames();
+        init_descriptor_set_layout();
+        init_buffers();  //  TODO: refactor to be like the others
+        init_pipeline();  //  TODO: refactor to be like the others
+        init_descriptor_pool();
+        init_descriptor_sets(); //  TODO: refactor to be like the others
+        init_sync_structures(); //  TODO: refactor to be like the others
+    }catch(vk::SystemError const& e){
+        LOG_FATAL("Failed to initialize vulkan: {}", e.what());
+    }
 }
 void VkEngine::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf){
     // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
@@ -657,18 +783,11 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
 }
 
 void VkEngine::update_uniforms(FrameData const& frame) {
-    auto t = timer::get_seconds(timer::since_epoch());
-    auto theta = static_cast<f32>(t * glm::radians(90.0f));
-    static constexpr auto origin = glm::vec3(0.0f);
-    static constexpr auto up= glm::vec3(0.0f, 1.0f, 0.0f);
-    static constexpr auto vfov = f32{40.0f};
-    static constexpr auto znear = f32{0.01f};
-    static constexpr auto zfar = f32{100.0f};
     auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
     auto ubo = UniformBufferObject{
-        .model = glm::translate(glm::mat4(1.0f),glm::vec3{2.0f,2.0f, 4.0f}),//glm::rotate(glm::mat4(1.0f), theta, glm::vec3(0.0f,0.0f,1.0f)),
-        .view = glm::lookAt(m_cam.pos,m_cam.pos + m_cam.get_front(), up),
-        .proj =  glm::perspective(vfov, aspect, znear,zfar),
+        .model = glm::translate(glm::mat4(1.0f),glm::vec3{2.0f,2.0f, 4.0f}),
+        .view = m_cam.get_view_matrix(),
+        .proj = m_cam.get_proj_matrix(aspect),
     };
     // HACK: glm uses y up for clip space, vulkan uses y down. flip here
     ubo.proj[1][1] *= -1; 

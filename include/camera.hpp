@@ -1,23 +1,34 @@
 #pragma once 
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/geometric.hpp"
 #include "types.hpp"
 #include "glm/trigonometric.hpp"
 struct Camera{
+    static inline constexpr auto WORLD_UP = glm::vec3{0,1,0};
+    static constexpr auto vfov = f32{40.0f};
+    static constexpr auto znear = f32{0.01f};
+    static constexpr auto zfar = f32{100.0f};
     glm::vec3 pos = glm::vec3(2.0f);
     glm::vec3 facing{};
     f32 yaw{90.0f},pitch{0.0f};
 
-    glm::vec3 get_facing(){
+    glm::vec3 get_facing() const{
         return glm::vec3{
             glm::cos(glm::radians(yaw)) * cos(glm::radians(pitch)),
             glm::sin(glm::radians(pitch)),
             glm::sin(glm::radians(yaw)) * cos(glm::radians(pitch)),
         };
-    }
-    glm::vec3 get_up(){ return glm::vec3{0,1.0f,0}; }
-    glm::vec3 get_right(){ return glm::cross(get_facing(), get_up());}
-    glm::vec3 get_front(){ return glm::normalize(get_facing());}
+    } 
+    auto get_proj_matrix(f32 aspect)       const{ return glm::perspective(vfov, aspect, znear,zfar); }
+    auto get_view_matrix()       const{ return glm::lookAt(pos,pos + get_front(), WORLD_UP); }
+    glm::vec3    get_up() const { return glm::vec3{0,1.0f,0}; }
+    glm::vec3 get_right() const { return glm::cross(get_facing(), get_up());}
+    glm::vec3 get_front() const { return glm::normalize(get_facing());}
+
+
+
     void move_right(f32 move_dist){
         pos += get_right() * move_dist;
     }

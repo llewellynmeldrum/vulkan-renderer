@@ -22,7 +22,5 @@ struct Swapchain {
     vk::Extent2D extent{};
     std::vector<vk::Image> images;
     std::vector<vk::raii::ImageView> imageViews{};
-
-    static Swapchain make(SwapchainSettings const& s);
 };
 
