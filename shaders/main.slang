@@ -9,14 +9,17 @@ struct UBO{
 struct VSInput{
     vec2 pos;
     vec3 color;
+    vec2 texCoord;
 };
 
 struct VSOutput{
     vec4 sv_position : SV_Position;
-    vec3 color;
+    vec3 fragColor;
+    vec2 fragTxCoord;
 };
 ConstantBuffer<UBO> ubo;
 
+Sampler2D texture;
 [shader("vertex")]
 VSOutput vertMain(VSInput in){
     VSOutput output;
@@ -29,11 +32,12 @@ VSOutput vertMain(VSInput in){
         )
     )
     ;
-    output.color = in.color;
+    output.fragColor = in.color;
+    output.fragTxCoord = in.texCoord;
     return output;
 }
 
 [shader("fragment")]
 vec4 fragMain(VSOutput in): SV_Target{
-    return vec4(in.color,1.0);
+    return texture.Sample(in.fragTxCoord*10.0);
 }

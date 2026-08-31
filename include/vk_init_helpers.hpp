@@ -52,7 +52,7 @@ constexpr inline auto enabled_physical_device_features(){
                // .largePoints = vk::True,
                // .alphaToOne = vk::True,
                // .multiViewport = vk::True,
-               // .samplerAnisotropy = vk::True,
+               .samplerAnisotropy = vk::True,
                // .textureCompressionETC2 = vk::True,
                // .textureCompressionASTC_LDR = vk::True,
                // .textureCompressionBC = vk::True,

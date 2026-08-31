@@ -95,8 +95,11 @@ void VkEngine::record_commands_to_buffer(u32 imageIndex){
 
 void VkEngine::update_uniforms(FrameData const& frame) {
     auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
+    auto model = glm::mat4(1.0f);
+    model = glm::translate(model,glm::vec3{2.0f,2.0f, 4.0f});
+    model = glm::scale(model,glm::vec3{10.0f,10.0f, 1.0f});
     auto ubo = UniformBufferObject{
-        .model = glm::translate(glm::mat4(1.0f),glm::vec3{2.0f,2.0f, 4.0f}),
+        .model = model,
         .view = m_cam.get_view_matrix(),
         .proj = m_cam.get_proj_matrix(aspect),
     };

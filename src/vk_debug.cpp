@@ -27,17 +27,18 @@ static std::string format_vk_error(vk::DebugUtilsMessengerCallbackDataEXT const*
     auto q_header  =std::format("queue entries (n={}):\n",d->queueLabelCount);
     auto q = std::string{};
     for (u32 i =0 ; i<d->queueLabelCount; i++){
-        q += std::format("\t[{}]: {}, \n",i,d->pQueueLabels->pLabelName);
+        q += std::format("\t[{}]-> {}, \n",i,d->pQueueLabels[i].pLabelName);
     }
     auto cb_header =std::format("Command buffer entries(n={}):\n",d->cmdBufLabelCount);
     auto cb = std::string{};
     for (u32 i =0 ; i<d->cmdBufLabelCount; i++){
-        cb += std::format("\t[{}]: {}, \n",i,d->pCmdBufLabels->pLabelName);
+        cb += std::format("\t[{}]-> {}, \n",i,d->pCmdBufLabels[i].pLabelName);
     }
     auto objs_header =std::format("Related objects (n={}):\n",d->objectCount);
     auto objs = std::string{};
     for (u32 i =0 ; i<d->objectCount; i++){
-        objs += std::format("\t[{}]: ({}) - {}, \n",i,vk::to_string(d->pObjects->objectType), d->pObjects->pObjectName);
+        objs += std::format("\t[{}]-> vk::{} '{}', \n",
+        i,vk::to_string(d->pObjects[i].objectType), d->pObjects[i].pObjectName);
     }
 
 

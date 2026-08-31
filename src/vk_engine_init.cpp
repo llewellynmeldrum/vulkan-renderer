@@ -3,6 +3,7 @@
 #include "sdl3_types.hpp"
 #include "glm_types.hpp"
 
+#include "stb_image.hpp"
 #include "format_specs.hpp"
 #include "file_io.hpp"
 #include "shared.hpp"
@@ -15,6 +16,7 @@
 #include "vk_buffers.hpp"
 #include "vk_init_helpers.hpp"
 #include "vk_buffers_helpers.hpp"
+#include "vulkan/vulkan.hpp"
 
 static char const* APP_NAME = "Test Window";
 
@@ -29,13 +31,13 @@ void VkEngine::init() {
         init_vk_device_and_queue();
         init_swapchain();
         init_inflightFrames();
-        init_descriptor_set_layout();
         init_buffers();  //  TODO: refactor to be like the others
-        init_pipeline();  //  TODO: refactor to be like the others
+        init_textures(); //  TODO: refactor to be like the others
+        init_descriptor_set_layout();
         init_descriptor_pool();
         init_descriptor_sets(); //  TODO: refactor to be like the others
+        init_pipeline();  //  TODO: refactor to be like the others
         init_sync_structures(); //  TODO: refactor to be like the others
-        init_textures(); //  TODO: refactor to be like the others
     }catch(vk::SystemError const& e){
         LOG_FATAL("Failed to initialize vulkan: {}", e.what());
     }
@@ -113,6 +115,7 @@ Swapchain make_swapchain(
         extent.width = std::clamp(extent.width, min.width, max.width);
         extent.height = std::clamp(extent.height, min.height, max.height);
     }
+
     auto image_count = caps.minImageCount+1;
     if (caps.maxImageCount > 0) { // 0 means "no upper bound" apparently
         image_count = std::min(image_count, caps.maxImageCount);
@@ -454,22 +457,40 @@ void VkEngine::init_descriptor_sets() {
         .setDescriptorPool(m_vkDescriptorPool)
         .setSetLayouts(layouts)
     );
-    for (auto i = 0uz; i<syncFrameCount; i++){
+    for (auto frame_idx = 0uz; frame_idx<syncFrameCount; frame_idx++){
         auto bufferInfo = 
             vk::DescriptorBufferInfo{}
-            .setBuffer(*m_inflightFrames[i].uniformBuffer)
-            .setOffset(0)
-            .setRange(sizeof(UniformBufferObject))
+                .setBuffer(*m_inflightFrames[frame_idx].uniformBuffer)
+                .setOffset(0)
+                .setRange(sizeof(UniformBufferObject))
          ;
-        m_vkDevice.updateDescriptorSets(
+        auto imageInfo = 
+            vk::DescriptorImageInfo{}
+            .setSampler(m_vkTextureSampler)
+            .setImageView(m_vkTextureImageView)
+            .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+         ;
+        auto descriptorWriteSets = std::array{
             vk::WriteDescriptorSet{}
-                .setDstSet(*m_vkDescriptorSets[i])
-                .setDstBinding(0)
+                .setDstSet(*m_vkDescriptorSets[frame_idx])
                 .setDstArrayElement(0)
                 .setDescriptorCount(1)
                 .setDescriptorType(vk::DescriptorType::eUniformBuffer)
-                .setBufferInfo(bufferInfo),
-             {}
+                .setBufferInfo(bufferInfo)
+            ,
+            vk::WriteDescriptorSet{}
+                .setDstSet(*m_vkDescriptorSets[frame_idx])
+                .setDstArrayElement(0)
+                .setDescriptorCount(1)
+                .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+                .setImageInfo(imageInfo)
+        };
+        for (i32 i = 0; i<descriptorWriteSets.size(); i++){
+            descriptorWriteSets[i].setDstBinding(i);
+        }
+        m_vkDevice.updateDescriptorSets(
+            descriptorWriteSets,
+            {}
         );
     }
 }
@@ -478,10 +499,14 @@ vk::raii::DescriptorPool make_descriptor_pool(
     vk::raii::Device const& m_vkDevice,
     u32 syncFrameCount
 ){
-    auto poolSizes = vk::DescriptorPoolSize{}
-        .setType(vk::DescriptorType::eUniformBuffer)
-        .setDescriptorCount(syncFrameCount)
-    ;
+    auto poolSizes = std::array{
+        vk::DescriptorPoolSize{}
+            .setType(vk::DescriptorType::eUniformBuffer)
+            .setDescriptorCount(syncFrameCount),
+        vk::DescriptorPoolSize{}
+            .setType(vk::DescriptorType::eCombinedImageSampler)
+            .setDescriptorCount(syncFrameCount),
+    };
     return vk::raii::DescriptorPool{
         m_vkDevice,
         vk::DescriptorPoolCreateInfo{}
@@ -499,18 +524,28 @@ vk::raii::DescriptorSetLayout make_descriptor_set_layout(
     vk::raii::Device const& m_vkDevice
 ) {
     // Descriptor set bindings all combine into a single desciptor set layout.
-    auto uboLayoutBinding = vk::DescriptorSetLayoutBinding{}
-        .setBinding(0)
-        .setDescriptorType(vk::DescriptorType::eUniformBuffer)
-        .setDescriptorCount(1)
-        .setStageFlags(vk::ShaderStageFlagBits::eVertex)
-    ;
+    auto layoutBindings = std::array{
+        vk::DescriptorSetLayoutBinding{
+            vk::DescriptorSetLayoutBinding{}
+                .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+                .setDescriptorCount(1)
+                .setStageFlags(vk::ShaderStageFlagBits::eVertex)
+        },
+        vk::DescriptorSetLayoutBinding{
+            vk::DescriptorSetLayoutBinding{}
+                .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+                .setDescriptorCount(1)
+                .setStageFlags(vk::ShaderStageFlagBits::eFragment)
+        },
+    };
+    for (i32 i = 0; i<layoutBindings.size(); i++){
+        layoutBindings[i].setBinding(i);
+    }
 
     return vk::raii::DescriptorSetLayout{
         m_vkDevice, 
         vk::DescriptorSetLayoutCreateInfo{}
-            .setBindingCount(1)
-            .setBindings(uboLayoutBinding)
+            .setBindings(layoutBindings)
     };
 }
 void VkEngine::init_descriptor_set_layout() {
@@ -640,6 +675,7 @@ std::vector<FrameData> make_inflightFrames(
 ) {
     std::vector<FrameData> m_inflightFrames{}; 
     m_inflightFrames.resize(frameCount);
+    int frame_idx = 0;
     for (auto& frame : m_inflightFrames){
         frame.commandPool = vk::raii::CommandPool{
             m_vkDevice,
@@ -662,6 +698,8 @@ std::vector<FrameData> make_inflightFrames(
         );
         ASSERT(buffers.size() == 1);
         frame.commandBuffer = std::move(buffers.at(0));
+        set_vk_dbg_name(m_vkDevice,frame.commandBuffer, std::format("Frame[{}] command buffer",frame_idx));
+        frame_idx++;
     }
 
     return m_inflightFrames;
@@ -690,7 +728,136 @@ void VkEngine::init_sync_structures() {
         frame_idx++;
     }
 }
-void VkEngine::init_textures() {
+
+struct ImageData{
+    static_assert(sizeof(unsigned char) == sizeof(std::byte));
+    static constexpr i32 img_bytes_per_channel {1}; 
+    static constexpr i32 desired_channels {STBI_rgb_alpha}; 
+    static constexpr auto vk_format = vk::Format::eR8G8B8A8Srgb;
+
+    constexpr u32 size_bytes(){
+        return img_bytes_per_channel * px_w * px_h * desired_channels;
+    }
+    constexpr vk::Extent2D get_extent2d(){
+        return vk::Extent2D{
+            static_cast<u32>(px_w),
+            static_cast<u32>(px_h),
+        };
+    }
+    i32 px_w{}, px_h{}, n_src_channels{};
+    std::span<std::byte> data;
+    constexpr void free_buffer(){
+        stbi_image_free(data.data());
+    }
+};
+ImageData load_from_filename(std::string filename){
+    ImageData img{};
+    auto* img_data = stbi_load(filename.c_str(), &img.px_w,&img.px_h,&img.n_src_channels,img.desired_channels);
+    img.data = std::span(reinterpret_cast<std::byte*>(img_data), img.size_bytes());
+    if (!img_data){
+        LOG_FATAL(
+            "Unable to load image at '{}'. reason:{}",
+            filename,
+            stbi_failure_reason()
+        );
+    }
+    return img;
 }
 
+void VkEngine::init_textures() {
+    auto img = load_from_filename("./textures/tim_cheese.png");
+
+    auto texStagingBuf = GPUBuffer::make_staging(m_vkDevice,m_vkPhysicalDevice, img.size_bytes());
+    texStagingBuf.upload_data(img.data);
+    img.free_buffer();
+
+    m_vkTextureImage = vk::raii::Image{
+        m_vkDevice,
+        vk::ImageCreateInfo{}
+            .setImageType(vk::ImageType::e2D)
+            .setFormat(img.vk_format)
+            .setExtent({static_cast<u32>(img.px_w),static_cast<u32>(img.px_h),1})
+            .setMipLevels(1)
+            .setArrayLayers(1)
+            .setSamples(vk::SampleCountFlagBits::e1)
+            .setTiling(vk::ImageTiling::eOptimal)
+            .setUsage(vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled)
+            .setSharingMode(vk::SharingMode::eExclusive)
+    };
+    set_vk_dbg_name(m_vkDevice,m_vkTextureImage, "Texture image");
+
+    auto memRequirements = m_vkTextureImage.getMemoryRequirements();
+    m_vkTextureImageMemory = vk::raii::DeviceMemory{
+        m_vkDevice,
+        vk::MemoryAllocateInfo{}
+            .setAllocationSize(memRequirements.size)
+            .setMemoryTypeIndex(
+                select_memory_type(
+                    m_vkPhysicalDevice,
+                    memRequirements.memoryTypeBits,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal
+                )
+            )
+    };
+    set_vk_dbg_name(m_vkDevice,m_vkTextureImageMemory, "Texture image memory");
+    m_vkTextureImage.bindMemory(m_vkTextureImageMemory,0);
+
+    auto cmdBuf = begin_single_use_cmd();
+    set_vk_dbg_name(m_vkDevice,cmdBuf, "Texture image transition layout buffer");
+
+    transition_img_layout(
+        cmdBuf,
+        m_vkTextureImage, 
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal
+    );
+    copy_buffer_to_image(cmdBuf,texStagingBuf.buf, m_vkTextureImage, img.get_extent2d());
+    transition_img_layout(
+        cmdBuf,
+        m_vkTextureImage, 
+        vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal
+    );
+    end_single_use_cmd(std::move(cmdBuf));
+
+
+    m_vkTextureImageView = vk::raii::ImageView(
+        m_vkDevice,
+        vk::ImageViewCreateInfo{}
+            .setImage(m_vkTextureImage)
+            .setViewType(vk::ImageViewType::e2D)
+            .setFormat(img.vk_format)
+            .setSubresourceRange(
+                vk::ImageSubresourceRange{}
+                    .setAspectMask(vk::ImageAspectFlagBits::eColor)
+                    .setBaseMipLevel(0)
+                    .setBaseArrayLayer(0)
+                    .setLayerCount(1)
+                    .setLevelCount(1)
+            )
+    );
+    set_vk_dbg_name(m_vkDevice,m_vkTextureImageView, "Texture imageview");
+
+
+    m_vkTextureSampler = vk::raii::Sampler(
+        m_vkDevice,
+        vk::SamplerCreateInfo{}
+            .setMagFilter(vk::Filter::eNearest)
+            .setMinFilter(vk::Filter::eNearest)
+            .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+            .setMipLodBias(0.0f)
+            .setMinLod(0.0f)
+            .setMaxLod(0.0f)
+            .setAddressModeU(vk::SamplerAddressMode::eRepeat)
+            .setAddressModeV(vk::SamplerAddressMode::eRepeat)
+            .setAddressModeW(vk::SamplerAddressMode::eRepeat)
+            .setAnisotropyEnable(vk::True)
+            .setMaxAnisotropy(m_vkPhysicalDevice.getProperties().limits.maxSamplerAnisotropy)
+            .setCompareEnable(vk::False)
+            .setCompareOp(vk::CompareOp::eAlways)
+            .setBorderColor(vk::BorderColor::eIntOpaqueWhite)
+            .setUnnormalizedCoordinates(vk::False)
+            
+    );
+    set_vk_dbg_name(m_vkDevice,m_vkTextureSampler, "Texture sampler");
+
+}
 

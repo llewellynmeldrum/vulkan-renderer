@@ -27,13 +27,13 @@
     if (selected_mem_type_idx == numeric_max<u32>) {
         LOG_FATAL("Unable to find suitable memory type for buffer creation.");
     }else{
-        auto const& memoryType  = device_memory_properties.memoryTypes[selected_mem_type_idx];
-        LOG_DBG(
-            "Selected Memtype: [{}]{} for ({})",
-            selected_mem_type_idx, 
-            vk::to_string(memoryType.propertyFlags),
-            vk::to_string(prop_flags_required)
-        );
+//        auto const& memoryType  = device_memory_properties.memoryTypes[selected_mem_type_idx];
+//        LOG_DBG(
+//            "Selected Memtype: [{}]{} for ({})",
+//            selected_mem_type_idx, 
+//            vk::to_string(memoryType.propertyFlags),
+//            vk::to_string(prop_flags_required)
+//        );
     }
     return selected_mem_type_idx;
 }
@@ -117,6 +117,53 @@ inline auto make_index_buffer(
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 }
+struct GPUBuffer{
+    GPUBuffer(
+        vk::raii::Device const& m_vkDevice,
+        vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
+        size_t _size_bytes,
+        vk::BufferUsageFlags _usage,
+        vk::MemoryPropertyFlags _memFlags
+    )
+        : size_bytes(_size_bytes)
+        , usage(_usage)
+        , memFlags(_memFlags)
+    {
+        std::tie(
+            buf,
+            memory
+        ) = make_buffer(m_vkDevice,m_vkPhysicalDevice,size_bytes,usage,memFlags);
+    }
+    static inline GPUBuffer make_staging(
+        vk::raii::Device const& m_vkDevice,
+        vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
+        size_t size_bytes
+    ){
+        return GPUBuffer(
+            m_vkDevice,
+            m_vkPhysicalDevice,
+            size_bytes,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+        );
+    }
+
+    const vk::DeviceSize size_bytes{};
+    const vk::BufferUsageFlags usage;
+    const vk::MemoryPropertyFlags memFlags{};
+    vk::raii::Buffer buf{nullptr};
+    vk::raii::DeviceMemory memory{nullptr};
+
+    template<typename T>
+    void upload_data(std::span<T> src){
+        ASSERT(src.size()>0);
+        auto* mapped = memory.mapMemory(0, src.size_bytes(), {});
+        std::memcpy(mapped, src.data(), src.size_bytes());
+        memory.unmapMemory();
+    }
+    
+};
+
 [[nodiscard]]
 inline auto make_staging_buffer(
     vk::raii::Device const& m_vkDevice,

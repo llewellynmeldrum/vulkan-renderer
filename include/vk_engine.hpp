@@ -78,6 +78,11 @@ struct VkEngine {
     vk::raii::Buffer m_indexBuffer{nullptr};
     vk::raii::DeviceMemory m_indexBufferMemory{nullptr};
 
+    vk::raii::Image m_vkTextureImage{nullptr};
+    vk::raii::DeviceMemory m_vkTextureImageMemory{nullptr};
+    vk::raii::ImageView m_vkTextureImageView{nullptr};
+    vk::raii::Sampler m_vkTextureSampler{nullptr};
+
     VkEngine& get_instance();
 
     bool is_initialized();
@@ -109,6 +114,23 @@ struct VkEngine {
     void update_uniforms(FrameData const& frame);
     void copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size);
     void recreate_swapchain();
+    vk::raii::CommandBuffer begin_single_use_cmd();
+    void end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf);
+
+    void copy_buffer_to_image(
+        vk::raii::CommandBuffer const& cmd, 
+        vk::raii::Buffer const& src_buffer, 
+        vk::raii::Image const& dst_image,
+        vk::Extent2D img_extent
+    );
+
+    void transition_img_layout(
+        vk::raii::CommandBuffer const& cmd, 
+        vk::raii::Image const& img,
+        vk::ImageLayout old_layout,
+        vk::ImageLayout new_layout
+    );
+
     auto dyn_get_viewport() const{
         return vk::Viewport{
             0.0f,0.0f, // viewport position

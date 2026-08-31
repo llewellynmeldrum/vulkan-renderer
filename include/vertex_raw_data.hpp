@@ -8,8 +8,12 @@
 #include "vulkan/vulkan.hpp"
 
 namespace vtx_raw_data{
-static constexpr u32 vtx_count(std::span<const Vertex> vertices){return static_cast<u32>(vertices.size());}
-static constexpr u32 idx_count(std::ranges::contiguous_range auto indices){return static_cast<u32>(indices.size());}
+static constexpr u32 vtx_count(std::span<const Vertex> vertices){
+    return static_cast<u32>(vertices.size());
+}
+static constexpr u32 idx_count(std::ranges::contiguous_range auto indices){
+    return static_cast<u32>(indices.size());
+}
 
 template<typename T, size_t N>
 static constexpr vk::IndexType vk_IndexType(std::array<T,N> const& _={}){
@@ -25,10 +29,10 @@ static constexpr vk::IndexType vk_IndexType(std::array<T,N> const& _={}){
 }
 
 
-static constexpr inline Vertex TL{{-0.5,-0.5}, {1.0,0.0,0.0}};
-static constexpr inline Vertex BL{{-0.5,+0.5}, {0.0,1.0,0.0}};
-static constexpr inline Vertex TR{{+0.5,-0.5}, {0.0,0.0,1.0}};
-static constexpr inline Vertex BR{{+0.5,+0.5}, {1.0,1.0,1.0}};
+static constexpr inline Vertex TL{.pos={-0.5,-0.5}, .color={1.0,0.0,0.0}, .texCoord={0.0,1.0}};
+static constexpr inline Vertex BL{.pos={-0.5,+0.5}, .color={0.0,1.0,0.0}, .texCoord={0.0,0.0}};
+static constexpr inline Vertex TR{.pos={+0.5,-0.5}, .color={0.0,0.0,1.0}, .texCoord={1.0,1.0}};
+static constexpr inline Vertex BR{.pos={+0.5,+0.5}, .color={1.0,1.0,1.0}, .texCoord={1.0,0.0}};
 // i wouldnt mind making some sort of draw wireframe function.
 
 inline constexpr auto ccw_quad_verts = std::array{

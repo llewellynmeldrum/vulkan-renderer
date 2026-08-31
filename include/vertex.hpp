@@ -12,7 +12,8 @@
 struct Vertex{
     glm::vec2 pos;
     glm::vec3 color;
-    static constexpr auto N_ATTRIBUTES{2uz};
+    glm::vec2 texCoord;
+    static constexpr auto N_ATTRIBUTES{3uz};
 };
 
 template<typename T>
@@ -30,6 +31,7 @@ template<> struct VertexTraits<Vertex>{
     static constexpr auto attribute_desc = std::array{
         MAKE_VATTR_DESC(0, Vertex, pos),
         MAKE_VATTR_DESC(1, Vertex, color),
+        MAKE_VATTR_DESC(2, Vertex, texCoord),
     };
 };
 

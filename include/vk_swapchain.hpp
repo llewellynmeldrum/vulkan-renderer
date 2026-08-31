@@ -6,7 +6,7 @@ struct SwapchainSettings {
     vk::raii::SurfaceKHR     const& surface;
 
     vk::Extent2D extent_px{};
-    vk::Format format{vk::Format::eB8G8R8A8Unorm};
+    vk::Format format{vk::Format::eB8G8R8A8Srgb};
     vk::ColorSpaceKHR colorSpace{vk::ColorSpaceKHR::eSrgbNonlinear};
     vk::PresentModeKHR present_mode{vk::PresentModeKHR::eFifo};
     vk::ImageUsageFlags image_usage_flags{
