@@ -137,153 +137,21 @@ public:
         mDomainWarpAmp = 1.0f;
     }
 
-    /// <summary>
-    /// Sets seed used for all noise types
-    /// </summary>
-    /// <remarks>
-    /// Default: 1337
-    /// </remarks>
-    void SetSeed(int seed) { mSeed = seed; }
-
-    /// <summary>
-    /// Sets frequency for all noise types
-    /// </summary>
-    /// <remarks>
-    /// Default: 0.01
-    /// </remarks>
-    void SetFrequency(float frequency) { mFrequency = frequency; }
-
-    /// <summary>
-    /// Sets noise algorithm used for GetNoise(...)
-    /// </summary>
-    /// <remarks>
-    /// Default: OpenSimplex2
-    /// </remarks>
-    void SetNoiseType(NoiseType noiseType)
-    {
-        mNoiseType = noiseType;
-        UpdateTransformType3D();
-    }
-
-    /// <summary>
-    /// Sets domain rotation type for 3D Noise and 3D DomainWarp.
-    /// Can aid in reducing directional artifacts when sampling a 2D plane in 3D
-    /// </summary>
-    /// <remarks>
-    /// Default: None
-    /// </remarks>
-    void SetRotationType3D(RotationType3D rotationType3D)
-    {
-        mRotationType3D = rotationType3D;
-        UpdateTransformType3D();
-        UpdateWarpTransformType3D();
-    }
-
-    /// <summary>
-    /// Sets method for combining octaves in all fractal noise types
-    /// </summary>
-    /// <remarks>
-    /// Default: None
-    /// Note: FractalType::DomainWarp... only affects DomainWarp(...)
-    /// </remarks>
-    void SetFractalType(FractalType fractalType) { mFractalType = fractalType; }
-
-    /// <summary>
-    /// Sets octave count for all fractal noise types 
-    /// </summary>
-    /// <remarks>
-    /// Default: 3
-    /// </remarks>
-    void SetFractalOctaves(int octaves)
-    {
-        mOctaves = octaves;
-        CalculateFractalBounding();
-    }
-
-    /// <summary>
-    /// Sets octave lacunarity for all fractal noise types
-    /// </summary>
-    /// <remarks>
-    /// Default: 2.0
-    /// </remarks>
-    void SetFractalLacunarity(float lacunarity) { mLacunarity = lacunarity; }
-
-    /// <summary>
-    /// Sets octave gain for all fractal noise types
-    /// </summary>
-    /// <remarks>
-    /// Default: 0.5
-    /// </remarks>
-    void SetFractalGain(float gain)
-    {
-        mGain = gain;
-        CalculateFractalBounding();
-    }
-
-    /// <summary>
-    /// Sets octave weighting for all none DomainWarp fratal types
-    /// </summary>
-    /// <remarks>
-    /// Default: 0.0
-    /// Note: Keep between 0...1 to maintain -1...1 output bounding
-    /// </remarks>
-    void SetFractalWeightedStrength(float weightedStrength) { mWeightedStrength = weightedStrength; }
-
-    /// <summary>
-    /// Sets strength of the fractal ping pong effect
-    /// </summary>
-    /// <remarks>
-    /// Default: 2.0
-    /// </remarks>
-    void SetFractalPingPongStrength(float pingPongStrength) { mPingPongStrength = pingPongStrength; }
-
-
-    /// <summary>
-    /// Sets distance function used in cellular noise calculations
-    /// </summary>
-    /// <remarks>
-    /// Default: Distance
-    /// </remarks>
-    void SetCellularDistanceFunction(CellularDistanceFunction cellularDistanceFunction) { mCellularDistanceFunction = cellularDistanceFunction; }
-
-    /// <summary>
-    /// Sets return type from cellular noise calculations
-    /// </summary>
-    /// <remarks>
-    /// Default: EuclideanSq
-    /// </remarks>
-    void SetCellularReturnType(CellularReturnType cellularReturnType) { mCellularReturnType = cellularReturnType; }
-
-    /// <summary>
-    /// Sets the maximum distance a cellular point can move from it's grid position
-    /// </summary>
-    /// <remarks>
-    /// Default: 1.0
-    /// Note: Setting this higher than 1 will cause artifacts
-    /// </remarks> 
-    void SetCellularJitter(float cellularJitter) { mCellularJitterModifier = cellularJitter; }
-
-
-    /// <summary>
-    /// Sets the warp algorithm when using DomainWarp(...)
-    /// </summary>
-    /// <remarks>
-    /// Default: OpenSimplex2
-    /// </remarks>
-    void SetDomainWarpType(DomainWarpType domainWarpType)
-    {
-        mDomainWarpType = domainWarpType;
-        UpdateWarpTransformType3D();
-    }
-
-
-    /// <summary>
-    /// Sets the maximum warp distance from original position when using DomainWarp(...)
-    /// </summary>
-    /// <remarks>
-    /// Default: 1.0
-    /// </remarks>
-    void SetDomainWarpAmp(float domainWarpAmp) { mDomainWarpAmp = domainWarpAmp; }
+    auto& SetSeed(int seed) { mSeed = seed; return *this;}
+    auto& SetFrequency(float frequency) { mFrequency = frequency; return *this;}
+    auto& SetNoiseType(NoiseType noiseType) { mNoiseType = noiseType; UpdateTransformType3D(); return *this; return *this;}
+    auto& SetRotationType3D(RotationType3D rotationType3D) { mRotationType3D = rotationType3D; UpdateTransformType3D(); UpdateWarpTransformType3D(); return *this;}
+    auto& SetFractalType(FractalType fractalType) { mFractalType = fractalType; return *this;}
+    auto& SetFractalOctaves(int octaves) { mOctaves = octaves; CalculateFractalBounding(); return *this;}
+    auto& SetFractalLacunarity(float lacunarity) { mLacunarity = lacunarity; return *this;}
+    auto& SetFractalGain(float gain) { mGain = gain; CalculateFractalBounding(); return *this;}
+    auto& SetFractalWeightedStrength(float weightedStrength) { mWeightedStrength = weightedStrength; return *this;}
+    auto& SetFractalPingPongStrength(float pingPongStrength) { mPingPongStrength = pingPongStrength; return *this;}
+    auto& SetCellularDistanceFunction(CellularDistanceFunction cellularDistanceFunction) { mCellularDistanceFunction = cellularDistanceFunction; return *this;}
+    auto& SetCellularReturnType(CellularReturnType cellularReturnType) { mCellularReturnType = cellularReturnType; return *this;}
+    auto& SetCellularJitter(float cellularJitter) { mCellularJitterModifier = cellularJitter; return *this;}
+    auto& SetDomainWarpType(DomainWarpType domainWarpType) { mDomainWarpType = domainWarpType; UpdateWarpTransformType3D(); return *this;}
+    auto& SetDomainWarpAmp(float domainWarpAmp) { mDomainWarpAmp = domainWarpAmp; return *this;}
 
 
     /// <summary>
