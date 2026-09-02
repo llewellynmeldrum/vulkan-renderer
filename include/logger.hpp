@@ -76,6 +76,7 @@ inline constexpr void LOG_WARN(std::format_string<_Args...> a_fmt, _Args&&... a_
         std::format(a_fmt,std::forward<_Args>(a_args)...)
     );
 }
+#define LOG_DBG_EXPR(expr) LOG_DBG("{} = {}", #expr, expr);
 template <class... _Args>
 inline constexpr void LOG_DBG(std::format_string<_Args...> a_fmt, _Args&&... a_args) {
     LOG_STR(

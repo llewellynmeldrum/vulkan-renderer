@@ -1,5 +1,6 @@
 #include "SDL3/SDL_video.h"
 #include "vk_engine.hpp"
+#include "vulkan/vulkan.hpp"
 #include <thread>
 void VkEngine::recreate_swapchain() {
     using namespace std::chrono_literals;
@@ -14,9 +15,9 @@ void VkEngine::recreate_swapchain() {
     m_swapchain.descriptor.clear();
     init_swapchain();
 }
-void VkEngine::copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size){
+void VkEngine::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset){
     auto cmdCopyBuf = begin_single_use_cmd();
-    cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=0, .dstOffset = 0, .size=size});
+    cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=offset, .dstOffset = 0, .size=size});
     end_single_use_cmd(std::move(cmdCopyBuf));
 }
 void VkEngine::copy_buffer_to_image(
@@ -46,10 +47,11 @@ void VkEngine::copy_buffer_to_image(
     );
 }
 void VkEngine::transition_img_layout(
-    vk::raii::CommandBuffer const& cmd, 
-    vk::raii::Image const& img,
-    vk::ImageLayout old_layout,
-    vk::ImageLayout new_layout
+    vk::raii::CommandBuffer const& cmd
+    ,vk::raii::Image const& img
+    ,vk::ImageLayout old_layout
+    ,vk::ImageLayout new_layout
+    ,vk::ImageAspectFlags image_aspect_flags
 ){
     auto barrier = vk::ImageMemoryBarrier{}
         .setOldLayout(old_layout)
@@ -59,7 +61,7 @@ void VkEngine::transition_img_layout(
         .setImage(img)
         .setSubresourceRange(
             vk::ImageSubresourceRange{}
-                .setAspectMask(vk::ImageAspectFlagBits::eColor)
+                .setAspectMask(image_aspect_flags)
                 .setLevelCount(1)
                 .setLayerCount(1)
         )

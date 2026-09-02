@@ -1,16 +1,14 @@
 #pragma once 
 
 // to ensure that vulkan gets the expected alignment of structs we pass into slang land 
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#include <glm/vec3.hpp>
-#include <glm/vec2.hpp>
 
+#include "glm_types.hpp"
 #include "vk_types.hpp"
 #include "vertex_helpers.hpp"
 #include "vulkan/vulkan.hpp"
 
 struct Vertex{
-    glm::vec2 pos;
+    glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
     static constexpr auto N_ATTRIBUTES{3uz};

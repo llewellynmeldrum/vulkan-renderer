@@ -1,4 +1,5 @@
 #pragma once 
+#include "SDL3/SDL_events.h"
 #include "shared.hpp"
 #include "vk_types.hpp"
 #include "camera.hpp"
@@ -10,6 +11,9 @@
 
 
 #include "vk_debug.hpp"
+#include "cpu_mesh.hpp"
+#include "gpu_mesh.hpp"
+#include "heightmap.hpp"
 
 FWD_DECL_STRUCT(SDL_Window);
 FWD_DECL_STRUCT(SDL_KeyboardEvent);
@@ -30,6 +34,13 @@ struct VkEngine {
     ~VkEngine() { cleanup(); }
 
     VkEngine* m_loadedEngine{};
+
+    Heightmap m_heightmap{};
+    CpuMesh m_cpu_heightmapMesh{};
+    GpuMesh m_gpu_heightmapMesh{};
+
+
+    VmaAllocator m_allocator;
 
     size_t m_frameCount{};
     bool m_shouldStopRendering{};
@@ -55,11 +66,26 @@ struct VkEngine {
 
     vk::raii::DescriptorSetLayout m_vkDescriptorSetLayout{nullptr};
     vk::raii::DescriptorPool m_vkDescriptorPool{nullptr};
-    std::vector<vk::raii::DescriptorSet> m_vkDescriptorSets;
+    std::vector<vk::raii::DescriptorSet> m_vkDescriptorSets; // indexed by frame
     vk::raii::PipelineLayout m_vkPipelineLayout{nullptr};
     vk::raii::Pipeline m_vkPipeline{nullptr};
 
-    void record_commands_to_buffer(u32 imageIndex);
+    struct RenderAttachments{
+        vk::RenderingAttachmentInfo colorAttachment;
+        vk::RenderingAttachmentInfo depthAttachment;
+        auto get_info(Swapchain const& swapchain) const{
+            return vk::RenderingInfo{}
+                .setRenderArea({.offset={},.extent=swapchain.extent})
+                .setLayerCount(1)
+                .setColorAttachments(colorAttachment)
+                .setPDepthAttachment(&depthAttachment)
+            ;
+        }
+
+    };
+    RenderAttachments prepare_render_attachments(vk::raii::CommandBuffer const& cmdBuf, u32 imageIndex, std::array<f32, 4> clearColor);
+    void draw_mesh(vk::raii::CommandBuffer const& cmdBuf, GpuMesh const& gpu_mesh);
+    void record_commands(vk::raii::CommandBuffer const& cmdBuf, u32 imageIndex);
 
     static constexpr inline auto vk_enabledDynamicState = std::array{
         vk::DynamicState::eViewport, 
@@ -72,16 +98,15 @@ struct VkEngine {
     u32 get_current_frame_index();
 
 
-    vk::raii::Buffer m_vertexBuffer{nullptr};
-    vk::raii::DeviceMemory m_vertexBufferMemory{nullptr};
-
-    vk::raii::Buffer m_indexBuffer{nullptr};
-    vk::raii::DeviceMemory m_indexBufferMemory{nullptr};
 
     vk::raii::Image m_vkTextureImage{nullptr};
     vk::raii::DeviceMemory m_vkTextureImageMemory{nullptr};
     vk::raii::ImageView m_vkTextureImageView{nullptr};
     vk::raii::Sampler m_vkTextureSampler{nullptr};
+
+    vk::raii::Image m_vkDepthImage{nullptr};
+    vk::raii::DeviceMemory m_vkDepthImageMemory{nullptr};
+    vk::raii::ImageView m_vkDepthImageView{nullptr};
 
     VkEngine& get_instance();
 
@@ -92,13 +117,14 @@ struct VkEngine {
 
     void run();
     void draw();
-    void handle_key_down(SDL_KeyboardEvent const& key_ev);
+    void present_image(u32 imageIndex, vk::Result acquire_res);
     void handle_inputs();
     
 
   private:
-    void init_window();
+    void init_sdl();
     void init_vk_instance();
+    void init_vma();
     void init_vk_surface();
     void init_vk_device_and_queue();
     void init_buffers();
@@ -109,10 +135,18 @@ struct VkEngine {
     void init_descriptor_sets();
     void init_inflightFrames();
     void init_textures();
+    void init_depth_attachment();
     void init_sync_structures();
+    void init_heightmap();
+    void upload_heightmap();
 
+
+
+    GpuMesh upload_gpu_mesh(CpuMesh const& cpu_mesh);
+
+    // drawing shit
     void update_uniforms(FrameData const& frame);
-    void copy_buffer(vk::raii::Buffer const & src, vk::raii::Buffer &dst, vk::DeviceSize size);
+    void copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size, vk::DeviceSize offset=0);
     void recreate_swapchain();
     vk::raii::CommandBuffer begin_single_use_cmd();
     void end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf);
@@ -123,12 +157,17 @@ struct VkEngine {
         vk::raii::Image const& dst_image,
         vk::Extent2D img_extent
     );
+    vk::Format select_depth_format(){
+        // TODO: if bothered, make a selector here, since some devices dont support it 
+        return vk::Format::eD32Sfloat;
+    }
 
     void transition_img_layout(
         vk::raii::CommandBuffer const& cmd, 
         vk::raii::Image const& img,
         vk::ImageLayout old_layout,
         vk::ImageLayout new_layout
+        ,vk::ImageAspectFlags image_aspect_flags
     );
 
     auto dyn_get_viewport() const{
@@ -148,5 +187,12 @@ struct VkEngine {
         return m_vkPolygonMode;
     }
 
+
+    void handle_key_down(SDL_KeyboardEvent const& ev);
+    void handle_mouse_motion(SDL_MouseMotionEvent const& ev);
+    void handle_scroll_motion(SDL_MouseWheelEvent const& ev);
+
+    // cleanup 
     void cleanup_window() const noexcept;
+    void cleanup_vma() const noexcept;
 };

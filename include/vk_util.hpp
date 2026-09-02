@@ -12,12 +12,10 @@ inline void transition_image_layout(
     vk::AccessFlags2 src_access_mask,
     vk::AccessFlags2 dst_access_mask,
     vk::PipelineStageFlags2 src_stage_mask,
-    vk::PipelineStageFlags2 dst_stage_mask
+    vk::PipelineStageFlags2 dst_stage_mask,
+    vk::ImageAspectFlags aspectMask
 ) {
 
-    auto aspectMask = (new_layout == vk::ImageLayout::eDepthAttachmentOptimal)
-            ? vk::ImageAspectFlagBits::eDepth 
-            : vk::ImageAspectFlagBits::eColor;
 
     auto imgBarrier = vk::ImageMemoryBarrier2KHR{
         .srcStageMask = src_stage_mask,

@@ -1,5 +1,9 @@
 #include <thread>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_core.h>
 
+#include "SDL3/SDL_vulkan.h"
+#include "heightmap.hpp"
 #include "sdl3_types.hpp"
 #include "glm_types.hpp"
 
@@ -11,12 +15,14 @@
 #include "vertex.hpp"
 #include "vk_engine.hpp"
 #include "vertex_raw_data.hpp"
+
+
 #include "vk_debug.hpp"
+#include "vk_types.hpp"
 #include "vk_util.hpp"
 #include "vk_buffers.hpp"
 #include "vk_init_helpers.hpp"
 #include "vk_buffers_helpers.hpp"
-#include "vulkan/vulkan.hpp"
 
 static char const* APP_NAME = "Test Window";
 
@@ -25,19 +31,23 @@ void VkEngine::init() {
     ASSERT(m_loadedEngine == nullptr);
     m_loadedEngine = this;
     try{
-        init_window();
+        init_sdl();
         init_vk_instance();
         init_vk_surface();
         init_vk_device_and_queue();
+        init_vma();
         init_swapchain();
         init_inflightFrames();
         init_buffers();  //  TODO: refactor to be like the others
         init_textures(); //  TODO: refactor to be like the others
+        init_depth_attachment(); //  TODO: refactor to be like the others
         init_descriptor_set_layout();
         init_descriptor_pool();
         init_descriptor_sets(); //  TODO: refactor to be like the others
         init_pipeline();  //  TODO: refactor to be like the others
         init_sync_structures(); //  TODO: refactor to be like the others
+        init_heightmap();
+        upload_heightmap();
     }catch(vk::SystemError const& e){
         LOG_FATAL("Failed to initialize vulkan: {}", e.what());
     }
@@ -67,11 +77,40 @@ SDL_Window* make_window(vk::Extent2D m_windowLogicalSize){
         LOG_ERROR("Failed to init window : {}", SDL_GetError());
         LOG_EXIT(1);
     }
+    if (!SDL_SetWindowRelativeMouseMode(m_window, true)){
+        LOG_ERROR("Failed to set relative mouse mode: {}", SDL_GetError());
+        LOG_EXIT(1);
+    }
     return m_window;
 }
 
-void VkEngine::init_window() {
+void VkEngine::init_sdl() {
     m_window = make_window(m_windowLogicalSize);
+}
+
+void VkEngine::upload_heightmap() {
+    m_gpu_heightmapMesh = upload_gpu_mesh(m_cpu_heightmapMesh);
+}
+
+void VkEngine::init_heightmap() {
+    f32 ex = 100.0f;
+    f32 ez = 100.0f;
+    m_heightmap = Heightmap(
+        HeightmapCreateInfo{
+            .world_center = glm::vec3{2.0f,2.0f, 4.0f},
+            .extentX = ex,
+            .extentZ = ez,
+            .noise_freq = 0.1f,
+            .boundsY = {-1,+1}
+        }
+    );
+    m_cpu_heightmapMesh = mesh_heightmap(
+        m_heightmap,
+        HeightMapMeshCreateInfo{
+            .num_x_samples = static_cast<u32>(64 * ex),
+            .num_z_samples = static_cast<u32>(64 * ez),
+        }
+    );
 }
 [[nodiscard]]
 Swapchain make_swapchain(
@@ -155,7 +194,9 @@ Swapchain make_swapchain(
     ASSERT(swapchain.images.size() > 0);
 
     swapchain.imageViews.reserve(swapchain.images.size());
+    int swap_img_idx = 0;
     for (auto const& image: swapchain.images){
+        set_vk_dbg_name(in.device,image, std::format("Swapchain image (frame:{})",swap_img_idx++));
         swapchain.imageViews.emplace_back(
             in.device,
             vk::ImageViewCreateInfo{
@@ -194,46 +235,6 @@ void VkEngine::init_swapchain() {
 
 
 void VkEngine::init_buffers() {
-    // VERTEX BUFFER
-    auto const& vtx_src = std::span{vtx_raw_data::ccw_quad_verts};
-    auto [
-        vtxStagingBuf,
-        vtxStagingMem
-    ] = make_staging_buffer(m_vkDevice, m_vkPhysicalDevice, vtx_src.size_bytes());
-    void *vtx_staging_data = vtxStagingMem.mapMemory(0,vtx_src.size_bytes());
-    std::memcpy(vtx_staging_data, vtx_src.data(), vtx_src.size_bytes());
-    vtxStagingMem.unmapMemory();
-    
-
-    std::tie(
-        m_vertexBuffer,
-        m_vertexBufferMemory
-    ) = make_vertex_buffer(m_vkDevice, m_vkPhysicalDevice, vtx_src.size_bytes(), vk::SharingMode::eExclusive);
-    copy_buffer(vtxStagingBuf,m_vertexBuffer,vtx_src.size_bytes());
-    set_vk_dbg_name(m_vkDevice, m_vertexBuffer, "Vertex buffer");
-
-
-
-    // INDEX BUFFER
-    auto const& idx_src = std::span{vtx_raw_data::ccw_quad_indices};
-
-    auto [
-        idxStagingBuf, 
-        idxStagingMem
-    ] = make_staging_buffer(m_vkDevice, m_vkPhysicalDevice, idx_src.size_bytes());
-    void *idx_staging_data = idxStagingMem.mapMemory(0,idx_src.size_bytes());
-    std::memcpy(idx_staging_data, idx_src.data(), idx_src.size_bytes());
-    idxStagingMem.unmapMemory();
-
-    std::tie(
-        m_indexBuffer,
-        m_indexBufferMemory
-    ) = make_index_buffer(m_vkDevice, m_vkPhysicalDevice, idx_src.size_bytes(), vk::SharingMode::eExclusive);
-
-    copy_buffer(idxStagingBuf,m_indexBuffer,idx_src.size_bytes());
-    set_vk_dbg_name(m_vkDevice, m_vertexBuffer, "Index buffer");
-
-
     // UNIFORM BUFFERS
     for (auto& frame : m_inflightFrames){
         auto const bufSize = static_cast<u32>(sizeof(UniformBufferObject));
@@ -267,6 +268,7 @@ DeviceQueueContext make_vk_device_and_queue(
     static constexpr auto required_device_extensions = std::array{
         vk::KHRSwapchainExtensionName,
         vk::EXTExtendedDynamicState3ExtensionName,
+        vk::EXTMemoryBudgetExtensionName,
     };
 
     // iterate over all physical devices listed by driver
@@ -441,6 +443,32 @@ VkInstanceContext make_vk_instance(
     }
     return ctx;
 }
+
+void VkEngine::init_vma(){
+    auto vma_vulkan_functions = VmaVulkanFunctions{
+        .vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr )SDL_Vulkan_GetVkGetInstanceProcAddr(),
+        .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+    };
+    // BUG: VMA REPORTED:
+    //Assertion failed: 
+    // (pCreateInfo->physicalDevice && pCreateInfo->device && pCreateInfo->instance), function VmaAllocator_T, file vk_mem_alloc.h, line 13347.
+    auto create_info = VmaAllocatorCreateInfo{
+        .flags =  VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT,
+        .physicalDevice = *m_vkPhysicalDevice,
+        .device = *m_vkDevice,
+        .pVulkanFunctions = &vma_vulkan_functions,
+        .instance = *m_vkInstance,
+        .vulkanApiVersion = VK_API_VERSION_1_4,
+    };
+
+    auto res = vmaCreateAllocator(&create_info, &m_allocator);
+    if (res != VkResult::VK_SUCCESS){
+        LOG_FATAL("Vulkan Memory Allocator failed to initialize");
+    }
+}
+void VkEngine::cleanup_vma()const noexcept{
+    vmaDestroyAllocator(m_allocator);
+}
 void VkEngine::init_vk_instance(){
     auto ctx = make_vk_instance(m_useValidationLayers, m_vkContext, API_VER);
     m_vkInstance = std::move(ctx.m_vkInstance);
@@ -589,7 +617,7 @@ void VkEngine::init_pipeline() {
         .setVertexAttributeDescriptions(VertexTraits<Vertex>::attribute_desc);
 
 
-    auto const iaState=  vk::PipelineInputAssemblyStateCreateInfo{
+    auto const inputAssemblyState=  vk::PipelineInputAssemblyStateCreateInfo{
         .topology = vk::PrimitiveTopology::eTriangleList,
     };
 
@@ -641,24 +669,33 @@ void VkEngine::init_pipeline() {
             .setSetLayouts(*m_vkDescriptorSetLayout)
     };
 
+    auto depthStencilState = vk::PipelineDepthStencilStateCreateInfo{}
+        .setDepthTestEnable(vk::True)
+        .setDepthWriteEnable(vk::True)
+        .setDepthCompareOp(vk::CompareOp::eLess)
+        .setDepthBoundsTestEnable(vk::False)
+        .setStencilTestEnable(vk::False)
+    ;
+
     auto pipelineCreateInfoChain =  vk::StructureChain{
-        vk::GraphicsPipelineCreateInfo{
-            .stageCount = shaderStages.size(),
-            .pStages = shaderStages.data(),
-            .pVertexInputState = &vertexInputState,
-            .pInputAssemblyState = &iaState,
-            .pViewportState = &viewportState,
-            .pRasterizationState = &rasterizationState,
-            .pMultisampleState = &multisamplingState,
-            .pColorBlendState = &colorBlendState,
-            .pDynamicState = &dynamicState,
-            .layout = m_vkPipelineLayout,
-            .renderPass = nullptr,
-        },
-        vk::PipelineRenderingCreateInfo{
-            .colorAttachmentCount = 1,
-            .pColorAttachmentFormats = &m_swapchain.imageFormat, 
-        },
+        vk::GraphicsPipelineCreateInfo{}
+            .setStageCount(shaderStages.size())
+            .setPStages(shaderStages.data())
+            .setPVertexInputState(&vertexInputState)
+            .setPInputAssemblyState(&inputAssemblyState)
+            .setPViewportState(&viewportState)
+            .setPRasterizationState(&rasterizationState)
+            .setPMultisampleState(&multisamplingState)
+            .setPColorBlendState(&colorBlendState)
+            .setPDynamicState(&dynamicState)
+            .setLayout(m_vkPipelineLayout)
+            .setPDepthStencilState(&depthStencilState)
+            .setRenderPass(nullptr)
+        ,
+        vk::PipelineRenderingCreateInfo{}
+            .setColorAttachmentCount(1)
+            .setPColorAttachmentFormats( &m_swapchain.imageFormat)
+            .setDepthAttachmentFormat(select_depth_format())
     };
     m_vkPipeline = vk::raii::Pipeline(
         m_vkDevice,
@@ -808,13 +845,15 @@ void VkEngine::init_textures() {
     transition_img_layout(
         cmdBuf,
         m_vkTextureImage, 
-        vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+        vk::ImageAspectFlagBits::eColor
     );
     copy_buffer_to_image(cmdBuf,texStagingBuf.buf, m_vkTextureImage, img.get_extent2d());
     transition_img_layout(
         cmdBuf,
         m_vkTextureImage, 
-        vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal
+        vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::ImageAspectFlagBits::eColor
     );
     end_single_use_cmd(std::move(cmdBuf));
 
@@ -861,3 +900,52 @@ void VkEngine::init_textures() {
 
 }
 
+void VkEngine::init_depth_attachment() {
+    m_vkDepthImage= vk::raii::Image{
+        m_vkDevice,
+        vk::ImageCreateInfo{}
+            .setImageType(vk::ImageType::e2D)
+            .setFormat(select_depth_format())
+            .setExtent({m_swapchain.extent.width,m_swapchain.extent.width,1})
+            .setMipLevels(1)
+            .setArrayLayers(1)
+            .setSamples(vk::SampleCountFlagBits::e1)
+            .setTiling(vk::ImageTiling::eOptimal)
+            .setUsage(vk::ImageUsageFlagBits::eDepthStencilAttachment)
+            .setSharingMode(vk::SharingMode::eExclusive)
+    };
+    set_vk_dbg_name(m_vkDevice,m_vkDepthImage, "Depth image");
+
+    auto memRequirements = m_vkDepthImage.getMemoryRequirements();
+    m_vkDepthImageMemory = vk::raii::DeviceMemory{
+        m_vkDevice,
+        vk::MemoryAllocateInfo{}
+            .setAllocationSize(memRequirements.size)
+            .setMemoryTypeIndex(
+                select_memory_type(
+                    m_vkPhysicalDevice,
+                    memRequirements.memoryTypeBits,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal
+                )
+            )
+    };
+    set_vk_dbg_name(m_vkDevice,m_vkDepthImageMemory, "Depth image memory");
+    m_vkDepthImage.bindMemory(m_vkDepthImageMemory,0);
+
+    m_vkDepthImageView = vk::raii::ImageView(
+        m_vkDevice,
+        vk::ImageViewCreateInfo{}
+            .setImage(m_vkDepthImage)
+            .setViewType(vk::ImageViewType::e2D)
+            .setFormat(select_depth_format())
+            .setSubresourceRange(
+                vk::ImageSubresourceRange{}
+                    .setAspectMask(vk::ImageAspectFlagBits::eDepth)
+                    .setBaseMipLevel(0)
+                    .setBaseArrayLayer(0)
+                    .setLayerCount(1)
+                    .setLevelCount(1)
+            )
+    );
+    
+}

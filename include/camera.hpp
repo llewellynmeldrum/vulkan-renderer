@@ -3,16 +3,18 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/geometric.hpp"
+#include "logger.hpp"
 #include "types.hpp"
 #include "glm/trigonometric.hpp"
 struct Camera{
     static inline constexpr auto WORLD_UP = glm::vec3{0,1,0};
-    static constexpr auto vfov = f32{40.0f};
+    f32 vfov = f32{60.0f};
+    f32 zoom_sens = f32{0.5f};
     static constexpr auto znear = f32{0.01f};
     static constexpr auto zfar = f32{100.0f};
-    glm::vec3 pos = glm::vec3(2.0f);
+    glm::vec3 pos{6.4400353, 3.8162503, 4.4812794};
     glm::vec3 facing{};
-    f32 yaw{90.0f},pitch{0.0f};
+    f32 yaw{170.0f},pitch{-10.0f};
 
     glm::vec3 get_facing() const{
         return glm::vec3{
@@ -21,12 +23,21 @@ struct Camera{
             glm::sin(glm::radians(yaw)) * cos(glm::radians(pitch)),
         };
     } 
-    auto get_proj_matrix(f32 aspect)       const{ return glm::perspective(vfov, aspect, znear,zfar); }
-    auto get_view_matrix()       const{ return glm::lookAt(pos,pos + get_front(), WORLD_UP); }
+    auto get_proj_matrix(f32 aspect)const{ return glm::perspective(glm::radians(vfov), aspect, znear,zfar); }
+    auto get_view_matrix()       const{ return glm::lookAt(pos, pos + get_front(), WORLD_UP); }
     glm::vec3    get_up() const { return glm::vec3{0,1.0f,0}; }
     glm::vec3 get_right() const { return glm::cross(get_facing(), get_up());}
     glm::vec3 get_front() const { return glm::normalize(get_facing());}
 
+    void rotate_pitch(f32 pitch_rel_01) {
+//        LOG_DBG("pitch:{}",pitch);
+        pitch -= pitch_rel_01 * vfov; 
+        pitch = glm::clamp(pitch - pitch_rel_01* vfov, -89.0f, 89.0f); 
+    }
+    void rotate_yaw(f32 yaw_rel_01) { 
+ //       LOG_DBG("yaw:{}",yaw);
+        yaw = yaw + yaw_rel_01*vfov;
+    }
 
 
     void move_right(f32 move_dist){

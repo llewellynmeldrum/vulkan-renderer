@@ -29,28 +29,21 @@ static constexpr vk::IndexType vk_IndexType(std::array<T,N> const& _={}){
 }
 
 
-static constexpr inline Vertex TL{.pos={-0.5,-0.5}, .color={1.0,0.0,0.0}, .texCoord={0.0,1.0}};
-static constexpr inline Vertex BL{.pos={-0.5,+0.5}, .color={0.0,1.0,0.0}, .texCoord={0.0,0.0}};
-static constexpr inline Vertex TR{.pos={+0.5,-0.5}, .color={0.0,0.0,1.0}, .texCoord={1.0,1.0}};
-static constexpr inline Vertex BR{.pos={+0.5,+0.5}, .color={1.0,1.0,1.0}, .texCoord={1.0,0.0}};
+static constexpr inline Vertex TL{.pos={-0.5,-0.5, 0.0}, .color={1.0,0.0,0.0}, .texCoord={0.0,1.0}};
+static constexpr inline Vertex BL{.pos={-0.5,+0.5, 0.0}, .color={0.0,1.0,0.0}, .texCoord={0.0,0.0}};
+static constexpr inline Vertex TR{.pos={+0.5,-0.5, 0.0}, .color={0.0,0.0,1.0}, .texCoord={1.0,1.0}};
+static constexpr inline Vertex BR{.pos={+0.5,+0.5, 0.0}, .color={1.0,1.0,1.0}, .texCoord={1.0,0.0}};
+
 // i wouldnt mind making some sort of draw wireframe function.
 
 inline constexpr auto ccw_quad_verts = std::array{
     BL,BR,
-    TR,TL
+    TR,TL,
 };
 // ccw winding starting in bot left
 inline constexpr auto ccw_quad_indices = std::array<u32,6>{
     0uz, 1uz, 2uz, 
     2uz, 3uz, 0uz,
 };
-inline constexpr auto ndc_triangle_verts = std::array{
-    BL, BR, TR,
-    TR, TL, BL,
-};
-//inline constexpr auto ndc_triangle_verts = std::array{
-//    Vertex{.pos = {+0.0, -0.5}, .color = {1.0, 0.0, 0.0}},
-//    Vertex{.pos = {+0.5, +0.5}, .color = {0.0, 1.0, 0.0}},
-//    Vertex{.pos = {-0.5, +0.5}, .color = {0.0, 0.0, 1.0}},
-//};
-}
+
+}// namespace vtx_raw_data

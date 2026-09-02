@@ -7,7 +7,7 @@ struct UBO{
 };
 
 struct VSInput{
-    vec2 pos;
+    vec3 pos;
     vec3 color;
     vec2 texCoord;
 };
@@ -27,7 +27,7 @@ VSOutput vertMain(VSInput in){
     mul(ubo.proj,
         mul(ubo.view,
             mul(ubo.model,
-                vec4(in.pos,0.0,1.0)
+                vec4(in.pos,1.0)
             )
         )
     )
@@ -39,5 +39,5 @@ VSOutput vertMain(VSInput in){
 
 [shader("fragment")]
 vec4 fragMain(VSOutput in): SV_Target{
-    return texture.Sample(in.fragTxCoord*10.0);
+    return vec4(in.fragColor,1.0f);
 }
