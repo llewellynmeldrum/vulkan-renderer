@@ -9,6 +9,7 @@ void VkEngine::run() {
             std::this_thread::sleep_for(100ms);
             continue;
         }
+        per_frame_update();
         draw();
     }
 }

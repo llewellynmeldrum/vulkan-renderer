@@ -8,6 +8,7 @@
 #include "style.hpp"
 #include "types.hpp"
 
+namespace detail::debug{
 static std::string format_vk_error(vk::DebugUtilsMessengerCallbackDataEXT const* d){
     auto res = std::string{};
 //    const char*                                  pMessageIdName;
@@ -37,8 +38,14 @@ static std::string format_vk_error(vk::DebugUtilsMessengerCallbackDataEXT const*
     auto objs_header =std::format("Related objects (n={}):\n",d->objectCount);
     auto objs = std::string{};
     for (u32 i =0 ; i<d->objectCount; i++){
-        objs += std::format("\t[{}]-> vk::{} '{}', \n",
-        i,vk::to_string(d->pObjects[i].objectType), d->pObjects[i].pObjectName);
+        objs += std::format("\t[{}]->",i);
+        objs += std::format("vk::{}", vk::to_string(d->pObjects[i].objectType));
+        if (d->pObjects[i].pObjectName){
+            objs += std::format("'{}'", d->pObjects[i].pObjectName);
+        }else{
+            objs += std::format("(unnamed)");
+        }
+        objs+="\n";
     }
 
 
@@ -54,11 +61,12 @@ static std::string format_vk_error(vk::DebugUtilsMessengerCallbackDataEXT const*
         style::with_fg(style::fg_br_red(),objs)
     );
 }
-VKAPI_ATTR vk::Bool32 VKAPI_CALL vk_debug_callback(
+VKAPI_ATTR vk::Bool32 VKAPI_CALL 
+vk_debug_callback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
     vk::DebugUtilsMessageTypeFlagsEXT types,
     vk::DebugUtilsMessengerCallbackDataEXT const* data,
-    void* _
+    [[maybe_unused]] void* user_ptr
 ) {
     auto custom_formatter = cpptrace::formatter{}
         .colors(cpptrace::formatter::color_mode::always)    // Force ANSI colors
@@ -90,3 +98,4 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL vk_debug_callback(
     }
     return vk::False;
 }
+} // namespace detail::debug

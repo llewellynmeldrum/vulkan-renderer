@@ -22,6 +22,7 @@
 #include "logger.hpp"
 #include "vk_concepts.hpp"
 
+namespace detail::debug{
 inline constexpr void vk_check(VkResult err) noexcept {
     if (err != VK_SUCCESS) {
         LOG_FATAL("VULKAN ERROR: {}", string_VkResult(err));
@@ -42,4 +43,4 @@ inline constexpr auto get_c_handle(From const& val) noexcept {
         static_assert(false, "T is not a vkhpp type");
     }
 }
-
+}

@@ -1,4 +1,4 @@
-#include "vk_buffers.hpp"
+#include "vk_managed_buffers.hpp"
 #include <cstdlib>
 #include <optional>
 #include <print>
@@ -67,6 +67,53 @@ void AllocatedBuffer::clear(){
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
     buffer     = nullptr;
+    allocation = nullptr;
+    mapped_ptr = nullptr;
+}
+
+
+AllocatedImage::AllocatedImage(
+    VmaAllocator const a_allocator,
+    vk::ImageCreateInfo imgInfo,
+    VmaAllocationCreateInfo allocCreateInfo,
+     std::string_view opt_name
+) 
+    :allocator(a_allocator)
+{
+//    LOG_DBG("====\nCreating allocation for buffer '{}'",opt_name);
+
+    auto rawImage = VkImage{};
+    auto allocOutInfo = VmaAllocationInfo{};
+    auto res = vmaCreateImage(
+        allocator,
+        reinterpret_cast<VkImageCreateInfo const*>(&imgInfo),
+        &allocCreateInfo,
+        &rawImage,
+        &allocation,
+        &allocOutInfo
+    );
+    if (res != VkResult::VK_SUCCESS){
+        LOG_ERROR("VMA Failed to allocate buffer: {}",vk::to_string(vk::Result{res}));
+        LOG_EXIT(EXIT_FAILURE);
+    }
+
+    static constexpr auto transfer_usage = vk::ImageUsageFlagBits::eTransferSrc;
+    static constexpr auto vma_transfer_flags = 
+        VMA_ALLOCATION_CREATE_MAPPED_BIT 
+        | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    if ((imgInfo.usage &  transfer_usage) == transfer_usage){
+        ASSERT((allocCreateInfo.flags & vma_transfer_flags) == vma_transfer_flags);
+        mapped_ptr = reinterpret_cast<std::byte*>(allocOutInfo.pMappedData);
+    }
+    image = rawImage;
+}
+
+void AllocatedImage::clear(){
+    if (allocator != nullptr && (image || allocation)){
+        vmaDestroyImage(allocator, image, allocation);
+    }
+    image     = nullptr;
     allocation = nullptr;
     mapped_ptr = nullptr;
 }

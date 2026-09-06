@@ -41,25 +41,26 @@ GpuMesh VkEngine::upload_gpu_mesh(CpuMesh const& cpu_mesh){
     // |            vtx_buf_size_bytes
     // 0x0 
     // So we can reuse a single staging buffer.
-    auto res = VkResult{};
-    res = vmaCopyMemoryToAllocation(
+    auto vertex_cpu_to_staging_res = VkResult{};
+    vertex_cpu_to_staging_res = vmaCopyMemoryToAllocation(
         m_allocator,
         cpu_mesh.vertices.data(),
         stagingBuffer.allocation,
         0,
         vk::DeviceSize{vtx_buf_size_bytes}
     );
-    if (res != VkResult::VK_SUCCESS){
+    if (vertex_cpu_to_staging_res != VkResult::VK_SUCCESS){
         LOG_FATAL("Failed to copy cpu vertex data into staging buffer.");
     }
-    res = vmaCopyMemoryToAllocation(
+    auto index_cpu_to_staging_res = VkResult{};
+    index_cpu_to_staging_res = vmaCopyMemoryToAllocation(
         m_allocator,
         cpu_mesh.indices.data(),
         stagingBuffer.allocation,
         vtx_buf_size_bytes, // offset, begins after vtx data
         idx_buf_size_bytes
     );
-    if (res != VkResult::VK_SUCCESS){
+    if (index_cpu_to_staging_res != VkResult::VK_SUCCESS){
         LOG_FATAL("Failed to copy cpu index data into staging buffer.");
     }
 

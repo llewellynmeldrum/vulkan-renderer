@@ -23,7 +23,9 @@ struct Camera{
             glm::sin(glm::radians(yaw)) * cos(glm::radians(pitch)),
         };
     } 
-    auto get_proj_matrix(f32 aspect)const{ return glm::perspective(glm::radians(vfov), aspect, znear,zfar); }
+    auto get_proj_matrix(f32 aspect)const{
+        return glm::perspective(glm::radians(vfov), aspect, zfar,znear); 
+    }
     auto get_view_matrix()       const{ return glm::lookAt(pos, pos + get_front(), WORLD_UP); }
     glm::vec3    get_up() const { return glm::vec3{0,1.0f,0}; }
     glm::vec3 get_right() const { return glm::cross(get_facing(), get_up());}

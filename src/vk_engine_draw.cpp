@@ -1,5 +1,5 @@
 #include "vertex_raw_data.hpp"
-#include "vk_buffers.hpp"
+#include "vk_managed_buffers.hpp"
 #include "vk_engine.hpp"
 #include "vk_types.hpp"
 #include "vk_util.hpp"
@@ -8,28 +8,25 @@
 #include <thread>
 
 void VkEngine::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf){
+    using std::ranges::contains;
     // we specified viewport and scissor rect to be dynamic, thus we must set them before the draw cmd
-    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::eViewport));
+    static_assert(contains(vk_enabledDynamicState, vk::DynamicState::eViewport));
     cmdBuf.setViewport(
         0, 
         dyn_get_viewport()
     );
 
-    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::eScissor));
+    static_assert(contains(vk_enabledDynamicState, vk::DynamicState::eScissor));
     cmdBuf.setScissor(
         0,
         dyn_get_scissor()
     );
 
-    static_assert(std::ranges::contains(vk_enabledDynamicState, vk::DynamicState::ePolygonModeEXT));
-    cmdBuf.setPolygonModeEXT(
-        dyn_get_polymode()
-    );
 }
-VkEngine::RenderAttachments VkEngine::prepare_render_attachments(
-    vk::raii::CommandBuffer const& cmdBuf,
-    u32 imageIndex,
-    std::array<f32, 4> clearColor
+RenderAttachmentContext VkEngine::prepare_render_attachments(
+        vk::raii::CommandBuffer const& cmdBuf,
+        u32 imageIndex,
+        std::array<f32, 4> clearColor
 ){
     auto const& swapImage =  m_swapchain.images.at(imageIndex);
     vk_util::transition_image_layout(
@@ -42,7 +39,7 @@ VkEngine::RenderAttachments VkEngine::prepare_render_attachments(
         vk::ImageAspectFlagBits::eColor
     );
     vk_util::transition_image_layout(
-        cmdBuf, m_vkDepthImage, 
+        cmdBuf, m_depthImage.img.image, 
         vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal,
         vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
         vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
@@ -57,8 +54,12 @@ VkEngine::RenderAttachments VkEngine::prepare_render_attachments(
             )
         )
     ;
+    // NOTE: Normally, we would clear with 1.0f, to represent everything defaulting to far.
+    // With flipped Z, far=0.0f, so we need to clear to 0.0f.
+    // The reason we flip the Z is so that we keep depth values in the range of a floating point numbers
+    // maximum precision, i.e values close to zero. Otherwise, only very far away values get that precision.
     vk::ClearValue clearDepthVal = vk::ClearValue{}
-        .setDepthStencil(vk::ClearDepthStencilValue(1.0f, 0))
+        .setDepthStencil(vk::ClearDepthStencilValue(0.0f, 0))
     ;
 
     auto attachmentInfo = vk::RenderingAttachmentInfo {}
@@ -69,7 +70,7 @@ VkEngine::RenderAttachments VkEngine::prepare_render_attachments(
         .setClearValue(clearColorVal)
     ;
     auto depthAttachmentInfo = vk::RenderingAttachmentInfo{}
-        .setImageView(m_vkDepthImageView)
+        .setImageView(m_depthImage.img_view)
         .setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal)
         .setLoadOp(vk::AttachmentLoadOp::eClear)
         .setStoreOp(vk::AttachmentStoreOp::eDontCare)
@@ -79,28 +80,23 @@ VkEngine::RenderAttachments VkEngine::prepare_render_attachments(
 
     return {attachmentInfo, depthAttachmentInfo};
 }
+
 // aka recordCommadBuffer in tutorial
 void VkEngine::draw_mesh(vk::raii::CommandBuffer const& cmdBuf, GpuMesh const& gpu_mesh){
     cmdBuf.bindVertexBuffers(0, gpu_mesh.vertices.buffer, {0});
     cmdBuf.bindIndexBuffer(gpu_mesh.indices.buffer, 0, m_gpu_heightmapMesh.index_type);
-    set_dynamic_state(cmdBuf);
 
+    ASSERT(gpu_mesh.m_index_count != 0);
     cmdBuf.drawIndexed(gpu_mesh.m_index_count, 1, 0,0,0);
 }
-void VkEngine::record_commands(vk::raii::CommandBuffer const& cmdBuf, u32 imageIndex){
+void VkEngine::record_commands(FrameData const& frame, u32 imageIndex){
 
+    auto const& cmdBuf = frame.commandBuffer;
     auto const frameIndex = get_current_frame_index();
     auto const& swapchainImage = m_swapchain.images.at(imageIndex);
 
     cmdBuf.reset();
     cmdBuf.begin({});
-    cmdBuf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        m_vkPipelineLayout,
-        0, 
-        *m_vkDescriptorSets[frameIndex],
-        nullptr
-    );
 
 
     std::array<float, 4> clearColor = {
@@ -109,17 +105,17 @@ void VkEngine::record_commands(vk::raii::CommandBuffer const& cmdBuf, u32 imageI
         std::abs(std::sin(m_frameCount / 120.0f)),
         1.0f
     };
-    auto renderAttachments = prepare_render_attachments(cmdBuf, imageIndex, clearColor);
+    update_uniforms(frame);
+    set_dynamic_state(cmdBuf);
+    auto renderAttachments = prepare_render_attachments(cmdBuf,imageIndex,clearColor);
     cmdBuf.beginRendering(renderAttachments.get_info(m_swapchain));
-    cmdBuf.bindPipeline(
-        vk::PipelineBindPoint::eGraphics,
-        *m_vkPipeline
-    );
-    draw_mesh(cmdBuf, m_gpu_heightmapMesh);
+
+    draw_pass(cmdBuf,m_fill_pipeline,frameIndex,vk::PolygonMode::eFill);
+    draw_pass(cmdBuf,m_line_pipeline,frameIndex,vk::PolygonMode::eLine);
 
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
-        cmdBuf, swapchainImage, 
+       cmdBuf, swapchainImage, 
         vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
         vk::AccessFlagBits2::eColorAttachmentWrite,
         {}, // must be eNone for ePresentSrcKHR
@@ -163,6 +159,22 @@ void VkEngine::present_image(u32 imageIndex, vk::Result acquire_res){
         ASSERT(present_rv==vk::Result::eSuccess);
     }
 }
+void VkEngine:: draw_pass( vk::raii::CommandBuffer const& cmdBuf, ShaderPipelineContext const&  pipeline, u32 frameIndex, vk::PolygonMode poly_mode){
+    cmdBuf.bindPipeline(
+        vk::PipelineBindPoint::eGraphics,
+        *pipeline.vk_pipeline
+    );
+    cmdBuf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        pipeline.layout,
+        0, 
+        *m_vkDescriptorSets[frameIndex],
+        nullptr
+    );
+    cmdBuf.setPolygonModeEXT(poly_mode);
+    draw_mesh(cmdBuf, m_gpu_heightmapMesh);
+}
+
 void VkEngine::draw() {
     // We perform this early check here in order to prevent a resized framebuffer to present a previous image
     if (m_framebufferResized){
@@ -191,9 +203,8 @@ void VkEngine::draw() {
     }
     // only reset if we acquired an image from the swapchain, else we early returned
     m_vkDevice.resetFences(*frame.fence);
-    update_uniforms(frame);
 
-    record_commands(frame.commandBuffer, imageIndex);
+    record_commands(frame,imageIndex);
 
     auto waitDstStageMask = static_cast<vk::PipelineStageFlags>(
         vk::PipelineStageFlagBits::eColorAttachmentOutput
@@ -209,7 +220,6 @@ void VkEngine::draw() {
     );
 
     present_image(imageIndex, acquire_res);
-
     m_frameCount++;
 }
 

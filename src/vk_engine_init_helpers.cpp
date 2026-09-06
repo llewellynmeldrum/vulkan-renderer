@@ -7,7 +7,8 @@ void VkEngine::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf){
     );
     m_vkQueue.waitIdle();
 }
-vk::raii::CommandBuffer VkEngine::begin_single_use_cmd(){
+
+auto VkEngine::begin_single_use_cmd() -> vk::raii::CommandBuffer{
     auto cmdBuf =  std::move(vk::raii::CommandBuffers(
             m_vkDevice,
             vk::CommandBufferAllocateInfo{}

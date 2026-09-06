@@ -1,4 +1,5 @@
 #include "glsl_types.slangh"
+#include "color_helpers.slangh"
 
 struct UBO{
     mat4 model;
@@ -39,5 +40,23 @@ VSOutput vertMain(VSInput in){
 
 [shader("fragment")]
 vec4 fragMain(VSOutput in): SV_Target{
-    return vec4(in.fragColor,1.0f);
+    return vec4(in.fragColor, 1.0);
 }
+
+// We slightly shift the depth (scaled by w) of the wireframe so that it appears on top.
+// Simply adding a depth bias to the pipeline is not enough.
+// Also note, since we have a flipped Z, we ADD to the z, which makes it closer (1.0f means close now, 0.0f means far)) 
+static const float DEPTH_NUDGE = 1e-5;
+[shader("vertex")]
+VSOutput vertWireframe(VSInput in){
+    VSOutput output = vertMain(in);
+    output.sv_position.z  += DEPTH_NUDGE * output.sv_position.w;
+    return output;
+}
+
+[shader("fragment")]
+vec4 fragWireframe(VSOutput in): SV_Target{
+//    return vec4(invert(in.fragColor), 1.0);
+    return vec4(smoothstep(0.0, 1.0, invert(in.fragColor)), 1.0);
+}
+// NOTE: Ensure you add any new fragment or vertex functions as an entry point in the cmake command.

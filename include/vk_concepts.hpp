@@ -1,6 +1,9 @@
 #pragma once
 
-// Matches resource-managing Vulkan RAII wrappers (e.g.,
+#include <concepts>
+#include "vulkan/vulkan.hpp"
+
+// Matches resource-managing Vulkan RAII wrappers 
 template <typename T>
 concept vkhpp_raii = requires(T t){
     typename T::CType; // Trivial handles define their raw C-type
@@ -13,4 +16,13 @@ template <typename T>
 concept vkhpp_handle = !vkhpp_raii<T> &&  std::copyable<T> && requires(T t) {
     typename T::CType; // Trivial handles define their raw C-type
     { static_cast<typename T::CType>(t) }; // Casts directly to C handle
+};
+
+template<typename T>
+concept isVkRaiiType = requires{
+    typename T::CppType;
+};
+template<typename T>
+concept IsCppHandle = requires { 
+    { T::objectType } -> std::same_as<const vk::ObjectType&>; 
 };

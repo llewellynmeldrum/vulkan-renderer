@@ -1,36 +1,37 @@
-#include <SDL3/SDL.h>
 
+#include "SDL3/SDL_keyboard.h"
+#include "SDL3/SDL_keycode.h"
+#include "SDL3/SDL_oldnames.h"
 #include "vk_engine.hpp"
 #include "format_specs.hpp"
+#include "vk_engine_input_keys.hpp"
 
-void VkEngine::handle_key_down(SDL_KeyboardEvent const& key_ev){
+void VkEngine::process_inputs(SDL_KeyboardEvent const& key_ev){
     static constexpr auto rotate_speed = f32{1.0f};
     static constexpr auto move_speed = f32{0.1f};
-    switch(key_ev.key){
-        case SDLK_T:{
+
+    // bug with key state
+    if (just_pressed(KeyCode::T)){
             if (m_vkPolygonMode == vk::PolygonMode::eFill){
                 m_vkPolygonMode = vk::PolygonMode::eLine;
             }
             else {
                 m_vkPolygonMode = vk::PolygonMode::eFill;
             }
-        } break;
-
-        case SDLK_LEFT: { m_cam.rotate_left(rotate_speed);  } break;
-        case SDLK_RIGHT:{ m_cam.rotate_right(rotate_speed); } break;
-        case SDLK_UP:   { m_cam.rotate_up(rotate_speed);    } break;
-        case SDLK_DOWN: { m_cam.rotate_down(rotate_speed);  } break;
-
-        case SDLK_A:{ m_cam.move_left(move_speed);      } break;
-        case SDLK_D:{ m_cam.move_right(move_speed);     } break;
-        case SDLK_W:{ m_cam.move_forward(move_speed);   } break;
-        case SDLK_S:{ m_cam.move_backward(move_speed);  } break;
-        case SDLK_Q:{ m_cam.move_up(move_speed);        } break;
-        case SDLK_E:{ m_cam.move_down(move_speed);      } break;
     }
+    if (is_down(KeyCode::LEFT)) { m_cam.rotate_left(rotate_speed);  }
+    if (is_down(KeyCode::RIGHT)) { m_cam.rotate_right(rotate_speed); }
+    if (is_down(KeyCode::UP)) { m_cam.rotate_up(rotate_speed);    }
+    if (is_down(KeyCode::DOWN)) { m_cam.rotate_down(rotate_speed);  }
 
-//    LOG_DBG("pos: {}",m_cam.pos);
-//    LOG_DBG("origin: {}",m_cam.pos + m_cam.get_front());
+    if (is_down(KeyCode::A)) { m_cam.move_left(move_speed);      }
+    if (is_down(KeyCode::D)) { m_cam.move_right(move_speed);     }
+    if (is_down(KeyCode::W)) { m_cam.move_forward(move_speed);   }
+    if (is_down(KeyCode::S)) { m_cam.move_backward(move_speed);  }
+    if (is_down(KeyCode::E) || is_down(KeyCode::SPACE)) { m_cam.move_up(move_speed);        }
+    if (is_down(KeyCode::Q) || is_down(KeyCode::RCTRL)) { m_cam.move_down(move_speed);      }
+
+    std::ranges::copy(keystate, keys_pressed_last_frame.begin());
 }
 
 void VkEngine::handle_scroll_motion(SDL_MouseWheelEvent const& wheel){
@@ -61,10 +62,15 @@ void VkEngine::handle_inputs(){
         if (e.type == SDL_EVENT_WINDOW_RESIZED) {
             m_framebufferResized = true;
         }
-
         if (e.type == SDL_EVENT_KEY_DOWN){
-            handle_key_down(e.key);
+            auto scancode = SDL_GetScancodeFromKey(e.key.key,nullptr);
+            keystate[scancode] = true;
         }
+        if (e.type == SDL_EVENT_KEY_UP){
+            auto scancode = SDL_GetScancodeFromKey(e.key.key,nullptr);
+            keystate[scancode] = false;
+        }
+
         if (e.type == SDL_EVENT_MOUSE_MOTION){
             handle_mouse_motion(e.motion);
         }
@@ -72,4 +78,5 @@ void VkEngine::handle_inputs(){
             handle_scroll_motion(e.wheel);
         }
     }
+    process_inputs({});
 }

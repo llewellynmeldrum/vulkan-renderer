@@ -1,7 +1,9 @@
+
+#include <thread>
 #include "SDL3/SDL_video.h"
 #include "vk_engine.hpp"
 #include "vulkan/vulkan.hpp"
-#include <thread>
+#include "vk_engine_init.hpp"
 void VkEngine::recreate_swapchain() {
     using namespace std::chrono_literals;
     auto framebuffer_sz = get_framebuffer_size();
@@ -13,91 +15,20 @@ void VkEngine::recreate_swapchain() {
     }
     m_vkDevice.waitIdle();
     m_swapchain.descriptor.clear();
-    init_swapchain();
+    auto swap_settings = SwapchainSettings{
+        .physical_device = m_vkPhysicalDevice,
+        .device = m_vkDevice,
+        .surface = m_vkSurface,
+        .extent_px = get_framebuffer_size(),
+    };
+    m_swapchain = detail::make_swapchain(swap_settings);
 }
 void VkEngine::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset){
     auto cmdCopyBuf = begin_single_use_cmd();
     cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=offset, .dstOffset = 0, .size=size});
     end_single_use_cmd(std::move(cmdCopyBuf));
 }
-void VkEngine::copy_buffer_to_image(
-    vk::raii::CommandBuffer const& cmd, 
-    vk::raii::Buffer const& src_buffer, 
-    vk::raii::Image const& dst_image,
-    vk::Extent2D img_extent
-){
-    cmd.copyBufferToImage(
-        src_buffer, 
-        dst_image,
-        vk::ImageLayout::eTransferDstOptimal,
-        vk::BufferImageCopy{}
-            .setBufferOffset(0)
-            .setBufferRowLength(0)
-            .setBufferImageHeight(0)
-            .setImageSubresource(
-                vk::ImageSubresourceLayers{}
-                    .setAspectMask(vk::ImageAspectFlagBits::eColor)
-                    .setMipLevel(0)
-                    .setBaseArrayLayer(0)
-                    .setLayerCount(1)
-            )
-            .setImageOffset({0,0,0})
-            .setImageExtent({img_extent.width,img_extent.height,1})
 
-    );
-}
-void VkEngine::transition_img_layout(
-    vk::raii::CommandBuffer const& cmd
-    ,vk::raii::Image const& img
-    ,vk::ImageLayout old_layout
-    ,vk::ImageLayout new_layout
-    ,vk::ImageAspectFlags image_aspect_flags
-){
-    auto barrier = vk::ImageMemoryBarrier{}
-        .setOldLayout(old_layout)
-        .setNewLayout(new_layout)
-        .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
-        .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
-        .setImage(img)
-        .setSubresourceRange(
-            vk::ImageSubresourceRange{}
-                .setAspectMask(image_aspect_flags)
-                .setLevelCount(1)
-                .setLayerCount(1)
-        )
-    ;
-    auto src_stage = vk::PipelineStageFlags{};
-    auto dst_stage = vk::PipelineStageFlags{};
-
-    if (old_layout == vk::ImageLayout::eUndefined 
-        && 
-        new_layout == vk::ImageLayout::eTransferDstOptimal
-    ){
-        barrier.setSrcAccessMask({});
-        barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
-
-        src_stage = vk::PipelineStageFlagBits::eTopOfPipe;
-        dst_stage = vk::PipelineStageFlagBits::eTransfer;
-    }else if (old_layout == vk::ImageLayout::eTransferDstOptimal
-              && 
-              new_layout == vk::ImageLayout::eShaderReadOnlyOptimal
-    ){
-        barrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
-        barrier.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
-
-        src_stage = vk::PipelineStageFlagBits::eTransfer;
-        dst_stage = vk::PipelineStageFlagBits::eFragmentShader;
-    }else {
-        LOG_FATAL("Unsupported image layout transition ({})->({})",
-                  vk::to_string(old_layout),vk::to_string(new_layout));
-    }
-
-    cmd.pipelineBarrier(src_stage, dst_stage, {}, {}, {}, barrier);
-}
-
-VkEngine& VkEngine::get_instance() { 
-    return *m_loadedEngine; 
-}
 bool VkEngine::is_initialized() { 
     return m_window; 
 }

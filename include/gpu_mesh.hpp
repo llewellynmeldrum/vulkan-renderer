@@ -1,6 +1,6 @@
 #pragma once 
 
-#include "vk_buffers.hpp"
+#include "vk_managed_buffers.hpp"
 struct GpuMesh{
     GpuMesh() = default;
     GpuMesh(const GpuMesh &) = delete;

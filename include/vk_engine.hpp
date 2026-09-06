@@ -1,6 +1,9 @@
 #pragma once 
 #include "SDL3/SDL_events.h"
+#include "Texture2D.hpp"
 #include "shared.hpp"
+#include "vk_engine_input_keys.hpp"
+#include "vk_managed_buffers.hpp"
 #include "vk_types.hpp"
 #include "camera.hpp"
 #include "vk_frame_data.hpp"
@@ -14,16 +17,20 @@
 #include "cpu_mesh.hpp"
 #include "gpu_mesh.hpp"
 #include "heightmap.hpp"
+#include "depth_image.hpp"
+
+#include "vk_engine_contexts.hpp"
 
 FWD_DECL_STRUCT(SDL_Window);
 FWD_DECL_STRUCT(SDL_KeyboardEvent);
 struct VkEngine {
   public:
+    static constexpr std::string_view shader_src_path = "shaders/slang.spv";
     static constexpr u32 syncFrameCount = 2;
     // the 'logical' size of the window. 
     // On a display with HiDPI (eg apple retina), the logical size will always be `x` times smaller than the 
     // 'pixel size', where `x` is the HiDPI pixel ratio.
-    static constexpr vk::Extent2D m_windowLogicalSize{800, 600};
+    static constexpr vk::Extent2D m_windowLogicalSize{1280, 720};
     static constexpr u32 API_VER = vk::ApiVersion13;
 
 
@@ -33,7 +40,6 @@ struct VkEngine {
     VkEngine() { init(); }
     ~VkEngine() { cleanup(); }
 
-    VkEngine* m_loadedEngine{};
 
     Heightmap m_heightmap{};
     CpuMesh m_cpu_heightmapMesh{};
@@ -64,28 +70,23 @@ struct VkEngine {
 
     std::vector<FrameData> m_inflightFrames{};
 
-    vk::raii::DescriptorSetLayout m_vkDescriptorSetLayout{nullptr};
     vk::raii::DescriptorPool m_vkDescriptorPool{nullptr};
+
+    vk::raii::DescriptorSetLayout m_vkDescriptorSetLayout{nullptr};
     std::vector<vk::raii::DescriptorSet> m_vkDescriptorSets; // indexed by frame
-    vk::raii::PipelineLayout m_vkPipelineLayout{nullptr};
-    vk::raii::Pipeline m_vkPipeline{nullptr};
 
-    struct RenderAttachments{
-        vk::RenderingAttachmentInfo colorAttachment;
-        vk::RenderingAttachmentInfo depthAttachment;
-        auto get_info(Swapchain const& swapchain) const{
-            return vk::RenderingInfo{}
-                .setRenderArea({.offset={},.extent=swapchain.extent})
-                .setLayerCount(1)
-                .setColorAttachments(colorAttachment)
-                .setPDepthAttachment(&depthAttachment)
-            ;
-        }
+    ShaderPipelineContext m_fill_pipeline{};
+    ShaderPipelineContext m_line_pipeline{};
 
-    };
-    RenderAttachments prepare_render_attachments(vk::raii::CommandBuffer const& cmdBuf, u32 imageIndex, std::array<f32, 4> clearColor);
+    RenderAttachmentContext prepare_render_attachments(
+        vk::raii::CommandBuffer const& cmdBuf,
+        u32 imageIndex,
+        std::array<f32, 4> clearColor
+    );
+
     void draw_mesh(vk::raii::CommandBuffer const& cmdBuf, GpuMesh const& gpu_mesh);
-    void record_commands(vk::raii::CommandBuffer const& cmdBuf, u32 imageIndex);
+
+    void record_commands(FrameData const& frame, u32 imageIndex);
 
     static constexpr inline auto vk_enabledDynamicState = std::array{
         vk::DynamicState::eViewport, 
@@ -99,16 +100,10 @@ struct VkEngine {
 
 
 
-    vk::raii::Image m_vkTextureImage{nullptr};
-    vk::raii::DeviceMemory m_vkTextureImageMemory{nullptr};
-    vk::raii::ImageView m_vkTextureImageView{nullptr};
-    vk::raii::Sampler m_vkTextureSampler{nullptr};
+    Texture2D m_texture{nullptr};
+    DepthAttachment m_depthImage{nullptr};
 
-    vk::raii::Image m_vkDepthImage{nullptr};
-    vk::raii::DeviceMemory m_vkDepthImageMemory{nullptr};
-    vk::raii::ImageView m_vkDepthImageView{nullptr};
 
-    VkEngine& get_instance();
 
     bool is_initialized();
 
@@ -116,26 +111,19 @@ struct VkEngine {
     void cleanup();
 
     void run();
+    void per_frame_update();
     void draw();
+    void draw_pass( vk::raii::CommandBuffer const& cmdBuf, ShaderPipelineContext const&  ctx, u32 frameIndex, vk::PolygonMode poly_mode);
     void present_image(u32 imageIndex, vk::Result acquire_res);
     void handle_inputs();
     
 
   private:
     void init_sdl();
-    void init_vk_instance();
-    void init_vma();
-    void init_vk_surface();
-    void init_vk_device_and_queue();
-    void init_buffers();
-    void init_swapchain();
-    void init_pipeline();
-    void init_descriptor_set_layout();
-    void init_descriptor_pool();
-    void init_descriptor_sets();
-    void init_inflightFrames();
-    void init_textures();
-    void init_depth_attachment();
+    void init_vulkan();
+    void init_fill_pipeline(vk::raii::ShaderModule const& shader_module);
+    void init_line_pipeline(vk::raii::ShaderModule const& shader_module);
+    void init_texture();
     void init_sync_structures();
     void init_heightmap();
     void upload_heightmap();
@@ -148,27 +136,10 @@ struct VkEngine {
     void update_uniforms(FrameData const& frame);
     void copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size, vk::DeviceSize offset=0);
     void recreate_swapchain();
-    vk::raii::CommandBuffer begin_single_use_cmd();
+    auto begin_single_use_cmd() -> vk::raii::CommandBuffer;
     void end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf);
 
-    void copy_buffer_to_image(
-        vk::raii::CommandBuffer const& cmd, 
-        vk::raii::Buffer const& src_buffer, 
-        vk::raii::Image const& dst_image,
-        vk::Extent2D img_extent
-    );
-    vk::Format select_depth_format(){
-        // TODO: if bothered, make a selector here, since some devices dont support it 
-        return vk::Format::eD32Sfloat;
-    }
 
-    void transition_img_layout(
-        vk::raii::CommandBuffer const& cmd, 
-        vk::raii::Image const& img,
-        vk::ImageLayout old_layout,
-        vk::ImageLayout new_layout
-        ,vk::ImageAspectFlags image_aspect_flags
-    );
 
     auto dyn_get_viewport() const{
         return vk::Viewport{
@@ -188,11 +159,32 @@ struct VkEngine {
     }
 
 
-    void handle_key_down(SDL_KeyboardEvent const& ev);
+    void process_inputs(SDL_KeyboardEvent const& ev);
     void handle_mouse_motion(SDL_MouseMotionEvent const& ev);
     void handle_scroll_motion(SDL_MouseWheelEvent const& ev);
 
     // cleanup 
     void cleanup_window() const noexcept;
     void cleanup_vma() const noexcept;
+    std::array<bool, KeyCode::COUNT> keystate{};
+    std::array<bool, KeyCode::COUNT> keys_pressed_last_frame{};
+    bool is_down(int key){
+        return keystate[key];
+    }
+
+    bool just_pressed(int key){
+        bool pressed_last_frame = keys_pressed_last_frame[key];
+        bool pressed_this_frame = keystate[key];
+
+        if (pressed_this_frame){
+            LOG_DBG("Key {} was pressed this frame, ",key);
+        }
+        if (pressed_last_frame){
+            LOG_DBG("And was     pressed last frame. ");
+        }else{
+            LOG_DBG("And was NOT pressed last frame. ");
+        }
+        return !pressed_last_frame && pressed_this_frame;
+    }
 };
+

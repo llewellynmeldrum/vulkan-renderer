@@ -1,5 +1,7 @@
-#include "vk_buffers.hpp"
+#pragma once 
+#include "vk_managed_buffers.hpp"
 #include "vk_types.hpp"
+namespace detail::helpers{
 [[nodiscard]] inline auto select_memory_type(
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
     u32 type_flags_required,
@@ -54,7 +56,7 @@
         },
     };
     auto mem_requirements = buf.getMemoryRequirements();
-    auto memType = select_memory_type(
+    auto memType = detail::helpers::select_memory_type(
         m_vkPhysicalDevice,
         mem_requirements.memoryTypeBits,
         memFlags
@@ -72,22 +74,8 @@
     return std::pair{std::move(buf),std::move(memory)};
 }
 
-[[nodiscard]] inline auto make_vertex_buffer(
-    vk::raii::Device const& m_vkDevice,
-    vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
-    size_t size_bytes,
-    vk::SharingMode sharing_mode 
-){
-    return make_buffer(
-        m_vkDevice,
-        m_vkPhysicalDevice,
-        size_bytes,
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-}
-[[nodiscard]]
-inline auto make_uniform_buffer(
+[[nodiscard]] inline auto 
+make_uniform_buffer(
     vk::raii::Device const& m_vkDevice,
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
     size_t size_bytes,
@@ -102,79 +90,39 @@ inline auto make_uniform_buffer(
     );
 
 }
-[[nodiscard]]
-inline auto make_index_buffer(
+[[nodiscard]] inline auto 
+make_shader_module(
     vk::raii::Device const& m_vkDevice,
-    vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
-    size_t size_bytes, 
-    vk::SharingMode sharing_mode 
+    std::span<const char> spirv_src
 ){
-    return make_buffer(
+    ASSERT(spirv_src.size() == spirv_src.size_bytes());
+    return vk::raii::ShaderModule{
         m_vkDevice,
-        m_vkPhysicalDevice,
-        size_bytes,
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
+        vk::ShaderModuleCreateInfo{
+            .codeSize = spirv_src.size(),
+            .pCode = reinterpret_cast<u32 const*>(spirv_src.data()),
+        },
+    };
 }
-struct GPUBuffer{
-    GPUBuffer(
-        vk::raii::Device const& m_vkDevice,
-        vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
-        size_t _size_bytes,
-        vk::BufferUsageFlags _usage,
-        vk::MemoryPropertyFlags _memFlags
-    )
-        : size_bytes(_size_bytes)
-        , usage(_usage)
-        , memFlags(_memFlags)
-    {
-        std::tie(
-            buf,
-            memory
-        ) = make_buffer(m_vkDevice,m_vkPhysicalDevice,size_bytes,usage,memFlags);
-    }
-    static inline GPUBuffer make_staging(
-        vk::raii::Device const& m_vkDevice,
-        vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
-        size_t size_bytes
-    ){
-        return GPUBuffer(
-            m_vkDevice,
-            m_vkPhysicalDevice,
-            size_bytes,
-            vk::BufferUsageFlagBits::eTransferSrc,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-        );
-    }
+[[nodiscard]] inline auto
+no_blend(
+)
+{
+    return vk::PipelineColorBlendAttachmentState{
+        .blendEnable = vk::False,
+        .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha, 
+        .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
 
-    const vk::DeviceSize size_bytes{};
-    const vk::BufferUsageFlags usage;
-    const vk::MemoryPropertyFlags memFlags{};
-    vk::raii::Buffer buf{nullptr};
-    vk::raii::DeviceMemory memory{nullptr};
+        .colorBlendOp        = vk::BlendOp::eAdd,
 
-    template<typename T>
-    void upload_data(std::span<T> src){
-        ASSERT(src.size()>0);
-        auto* mapped = memory.mapMemory(0, src.size_bytes(), {});
-        std::memcpy(mapped, src.data(), src.size_bytes());
-        memory.unmapMemory();
-    }
-    
-};
+        .srcAlphaBlendFactor = vk::BlendFactor::eOne, .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+        .alphaBlendOp        = vk::BlendOp::eAdd,
 
-[[nodiscard]]
-inline auto make_staging_buffer(
-    vk::raii::Device const& m_vkDevice,
-    vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
-    size_t size_bytes
-){
-    return make_buffer(
-        m_vkDevice,
-        m_vkPhysicalDevice,
-        size_bytes,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
+        .colorWriteMask = vk::ColorComponentFlagBits::eR 
+            | vk::ColorComponentFlagBits::eG
+            | vk::ColorComponentFlagBits::eB
+            | vk::ColorComponentFlagBits::eA
+    };
 }
+
+} // namespace detail::helpers

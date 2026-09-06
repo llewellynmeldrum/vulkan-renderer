@@ -1,0 +1,8 @@
+#ifndef COLOR_HELPERS_H
+#define COLOR_HELPERS_H
+
+float3 invert(float3 val){
+    return 1.0 - val;
+}
+
+#endif // COLOR_HELPERS_H

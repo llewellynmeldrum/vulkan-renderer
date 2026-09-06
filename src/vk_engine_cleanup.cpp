@@ -9,22 +9,12 @@ void VkEngine::cleanup() {
             frame = FrameData{};
         }
         m_vkQueue.clear();
-        m_vkDescriptorSetLayout.clear();
-        m_vkPipelineLayout.clear();
-        m_vkPipeline.clear();
+        m_line_pipeline.clear();
+        m_fill_pipeline.clear();
 
         m_gpu_heightmapMesh.clear();
 
-        m_vkDepthImage.clear();
-        m_vkDepthImageMemory.clear();
-        m_vkDepthImageView.clear();
 
-        m_vkTextureImage.clear();
-        m_vkTextureImageMemory.clear();
-        m_vkTextureImageView.clear();
-        m_vkTextureSampler.clear();
-
-        m_vkDescriptorSets.clear();
         m_vkDescriptorPool.clear();
 
 
@@ -38,7 +28,6 @@ void VkEngine::cleanup() {
         cleanup_window();
         m_window = nullptr;
     }
-    m_loadedEngine = nullptr;
 }
 
 
