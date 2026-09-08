@@ -26,6 +26,7 @@ add_executable(vulkan_test0 ${APP_SRC})
 # -- warnings --
 target_compile_options(vulkan_test0 PRIVATE
     -Wall
+    -Wswitch
     -Werror
     -Wimplicit-fallthrough
     -Wno-unused
@@ -165,7 +166,9 @@ set(SHADER_SLANG_SOURCES
 function (add_slang_shader_target TARGET)
     cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
     set (SHADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/shaders)
-    set (ENTRY_POINTS -entry vertMain -entry fragMain)
+    set (ENTRY_POINTS
+        -entry vertMain -entry fragMain -entry vertWireframe -entry fragWireframe
+    )
     add_custom_command (
           OUTPUT ${SHADERS_DIR}
           COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
@@ -194,6 +197,7 @@ add_custom_target(debug
     COMMAND lldb -o run -- "$<TARGET_FILE:vulkan_test0>"
     DEPENDS vulkan_test0
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    USES_TERMINAL
 )
 
 if(APPLE)

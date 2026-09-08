@@ -14,3 +14,5 @@ docs/*
 
 rename_header
 resources/fonts
+
+external/*
