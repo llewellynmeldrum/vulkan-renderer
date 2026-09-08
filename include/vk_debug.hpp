@@ -2,7 +2,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
-#include "vk_concepts.hpp"
+#include "renderer_concepts.hpp"
 #include "vk_types.hpp"
 
 namespace detail::debug{

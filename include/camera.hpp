@@ -16,6 +16,11 @@ struct Camera{
     glm::vec3 facing{};
     f32 yaw{170.0f},pitch{-10.0f};
 
+    void handle_mouse_movement(glm::vec2 rel){
+        rotate_yaw(rel.x);
+        rotate_pitch(rel.y);
+    }
+
     glm::vec3 get_facing() const{
         return glm::vec3{
             glm::cos(glm::radians(yaw)) * cos(glm::radians(pitch)),
@@ -55,10 +60,10 @@ struct Camera{
         pos -= get_up() * move_dist;
     }
     void move_forward(f32 move_dist){
-        pos += get_front() * move_dist;
+        pos += get_facing() * move_dist;
     }
     void move_backward(f32 move_dist){
-        pos -= get_front() * move_dist;
+        pos -= get_facing() * move_dist;
     }
 
     void rotate_right(f32 rotate_dist){

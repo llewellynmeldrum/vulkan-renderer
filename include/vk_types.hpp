@@ -20,7 +20,7 @@
 
 #include "common_concepts.hpp"
 #include "logger.hpp"
-#include "vk_concepts.hpp"
+#include "renderer_concepts.hpp"
 
 namespace detail::debug{
 inline constexpr void vk_check(VkResult err) noexcept {

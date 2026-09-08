@@ -5,7 +5,7 @@
 #include "types.hpp"
 #include "unix_helpers.hpp"
 
-static constexpr inline bool DBG_FILE_READS = true;
+static constexpr inline bool DBG_FILE_READS = false;
 
 static constexpr inline std::vector<char> read_file_contents(std::string_view filename){
     auto const filename_str = std::string(filename);

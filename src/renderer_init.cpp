@@ -14,7 +14,7 @@
 #include "shared.hpp"
 #include "timer.hpp"
 #include "vertex.hpp"
-#include "vk_engine.hpp"
+#include "renderer.hpp"
 #include "vk_image_data.hpp"
 #include "vertex_raw_data.hpp"
 
@@ -22,62 +22,30 @@
 #include "vk_debug.hpp"
 #include "vk_types.hpp"
 #include "vk_util.hpp"
+#include "vk_vertex_traits.hpp"
 #include "vk_managed_buffers.hpp"
-#include "vk_init_helpers.hpp"
-#include "vk_buffers_helpers.hpp"
+#include "renderer_init_helpers.hpp"
+#include "renderer_buffer_helpers.hpp"
 
-#include "vk_engine_init.hpp"
-#include "vk_engine_contexts.hpp"
-#include "vk_engine_create_infos.hpp"
+#include "renderer_init.hpp"
+#include "renderer_types.hpp"
 
-static char const* APP_NAME = "Test Window";
 
-void VkEngine::init() {
-    LOG_INFO("INITIALIZING ENGINE ({})", static_cast<void*>(this));
-    init_heightmap();
-    init_sdl();
+void Renderer::init(SDL_Window* window, glm::uvec2 window_extent) {
+    m_pixelSize = SDL_GetWindowPixelDensity(window);
+    m_window = window;
+    m_windowLogicalExtent = {window_extent.x,window_extent.y};
+    m_windowPixelExtent = logical_to_pixel(m_windowLogicalExtent);
+    LOG_INFO("INITIALIZING RENDERER ({})", static_cast<void*>(this));
     init_vulkan();
-    upload_heightmap();
 }
 
-[[nodiscard]]
-SDL_Window* make_window(vk::Extent2D m_windowLogicalSize){
-    SDL_Window* m_window{nullptr};
-    static constexpr auto init_flags = 
-        SDL_INIT_VIDEO
-        | SDL_INIT_EVENTS;
 
-    static constexpr auto window_flags = 
-        SDL_WINDOW_VULKAN 
-        | SDL_WINDOW_RESIZABLE
-        //| SDL_WINDOW_HIGH_PIXEL_DENSITY
-        ;
-
-
-    SDL_Init(init_flags);
-    m_window = SDL_CreateWindow(
-        APP_NAME,
-        m_windowLogicalSize.width,
-        m_windowLogicalSize.height,
-        window_flags
-    );
-
-    if (!m_window) {
-        LOG_ERROR("Failed to init window : {}", SDL_GetError());
-        LOG_EXIT(1);
-    }
-    if (!SDL_SetWindowRelativeMouseMode(m_window, true)){
-        LOG_ERROR("Failed to set relative mouse mode: {}", SDL_GetError());
-        LOG_EXIT(1);
-    }
-    return m_window;
-}
-
-void VkEngine::init_vulkan() {
+void Renderer::init_vulkan() {
     //clang-format off
     try{
         {
-            auto ctx = detail::make_vk_instance(m_useValidationLayers, m_vkContext, API_VER);
+            auto ctx = detail::make_vk_instance(k_useValidationLayers, m_vkContext, k_API_VER);
             m_vkInstance = std::move(ctx.m_vkInstance);
             m_vkDebugMessenger = std::move(ctx.m_vkDebugMessenger);
         }
@@ -87,7 +55,7 @@ void VkEngine::init_vulkan() {
         }
 
         {
-            auto ctx = detail::make_vk_device_and_queue(m_vkInstance,m_vkSurface, API_VER);
+            auto ctx = detail::make_vk_device_and_queue(m_vkInstance,m_vkSurface, k_API_VER);
             m_vkPhysicalDevice = std::move(ctx.m_vkPhysicalDevice);
             m_vkDevice         = std::move(ctx.m_vkDevice);
             m_vkQueue          = std::move(ctx.m_vkQueue);
@@ -112,7 +80,7 @@ void VkEngine::init_vulkan() {
             m_inflightFrames = detail::make_inflight_frames(
                 m_vkDevice,
                 m_vkPhysicalDevice,
-                syncFrameCount,
+                k_syncFrameCount,
                 m_vkQueueFamily
             );
         }
@@ -131,20 +99,20 @@ void VkEngine::init_vulkan() {
 
         {
             m_vkDescriptorSetLayout = detail::make_descriptor_set_layout(m_vkDevice);
-            m_vkDescriptorPool = detail::make_descriptor_pool(m_vkDevice, syncFrameCount);
+            m_vkDescriptorPool = detail::make_descriptor_pool(m_vkDevice, k_syncFrameCount);
             m_vkDescriptorSets = detail::make_descriptor_sets(
                 m_vkDevice,
                 m_vkDescriptorPool,
                 m_vkDescriptorSetLayout,
                 m_inflightFrames,
                 m_texture,
-                syncFrameCount
+                k_syncFrameCount
             );
         }
 
 
         {
-            auto shader_src = read_file_contents(shader_src_path);
+            auto shader_src = read_file_contents(k_shader_spirv_path);
             auto shader_module = detail::helpers::make_shader_module(m_vkDevice, shader_src);
             init_fill_pipeline(shader_module);
             init_line_pipeline(shader_module);
@@ -157,39 +125,12 @@ void VkEngine::init_vulkan() {
         LOG_FATAL("Failed to initialize vulkan: {}", e.what());
     }
 }
-void VkEngine::init_sdl() {
-    m_window = make_window(m_windowLogicalSize);
-}
 
-void VkEngine::upload_heightmap() {
-    m_gpu_heightmapMesh = upload_gpu_mesh(m_cpu_heightmapMesh);
-}
 
-void VkEngine::init_heightmap() {
-    f32 ex = 100.0f;
-    f32 ez = 100.0f;
-    i32 samples_per_meter = 1;
-    m_heightmap = Heightmap(
-        HeightmapCreateInfo{
-            .world_center = glm::vec3{2.0f,2.0f, 4.0f},
-            .extentX = ex,
-            .extentZ = ez,
-            .noise_freq = 0.1f,
-            .boundsY = {-1,+1}
-        }
-    );
-    m_cpu_heightmapMesh = mesh_heightmap(
-        m_heightmap,
-        HeightMapMeshCreateInfo{
-            .num_x_samples = static_cast<u32>(samples_per_meter * ex),
-            .num_z_samples = static_cast<u32>(samples_per_meter * ez),
-        }
-    );
-}
 
 
 //void init_vma(
-void VkEngine::cleanup_vma()const noexcept{
+void Renderer::cleanup_vma()const noexcept{
     vmaDestroyAllocator(m_allocator);
 }
 
@@ -300,7 +241,7 @@ auto make_shader_pipeline(ShaderPipelineCreateInfo info){
         std::move(pipeline_layout)
     };
 }
-void VkEngine::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
+void Renderer::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
     m_line_pipeline = make_shader_pipeline<Vertex>(
         ShaderPipelineCreateInfo {
             .device                  = m_vkDevice,
@@ -325,7 +266,7 @@ void VkEngine::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
 
 }
 
-void VkEngine::init_fill_pipeline(vk::raii::ShaderModule const& shader_module) {
+void Renderer::init_fill_pipeline(vk::raii::ShaderModule const& shader_module) {
     m_fill_pipeline = make_shader_pipeline<Vertex>(
         ShaderPipelineCreateInfo {
             .device                  = m_vkDevice,
@@ -348,11 +289,8 @@ void VkEngine::init_fill_pipeline(vk::raii::ShaderModule const& shader_module) {
     );
 }
 
-//void VkEngine::init_inflightFrames() {
-//    m_inflightFrames = make_inflightFrames(m_vkDevice,syncFrameCount, m_vkQueueFamily);
-//}
 
-void VkEngine::init_sync_structures() {
+void Renderer::init_sync_structures() {
     int frame_idx = 0;
     for (auto& frame : m_inflightFrames) {
         // Fences are cpu<->gpu. 
@@ -374,7 +312,7 @@ void VkEngine::init_sync_structures() {
 }
 
 
-void VkEngine::init_texture() {
+void Renderer::init_texture() {
     auto img_raw_data = ImageData::load_from_filename("./textures/tim_cheese.png");
     auto cmdBuf = begin_single_use_cmd();
     set_vk_dbg_name(m_vkDevice,cmdBuf, "Texture image transition layout buffer");

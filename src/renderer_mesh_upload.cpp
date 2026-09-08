@@ -1,16 +1,15 @@
 #include "glm_types.hpp"
-#include "vk_engine.hpp"
+#include "renderer.hpp"
 #include "vk_types.hpp"
-GpuMesh VkEngine::upload_gpu_mesh(CpuMesh const& cpu_mesh){
+
+auto Renderer::create_gpu_mesh(CpuMesh const& cpu_mesh)
+-> GpuMesh {
     auto mesh = GpuMesh{};
-    mesh.allocator = m_allocator;
-    mesh.num_vertices = cpu_mesh.vertices.size();
+    mesh.m_allocator = m_allocator;
+    mesh.m_vertex_count = cpu_mesh.vertices.size();
     mesh.m_index_count = cpu_mesh.indices.size();
-//    LOG_DBG("Uploading gpu mesh ({} verts, {} indices, {} quads.)",mesh.num_vertices, mesh.m_index_count, cpu_mesh.m_quad_count);
-
-
-    auto vtx_buf_size_bytes = cpu_mesh.vertices.size() * sizeof(CpuMesh::VertexType);
-    auto idx_buf_size_bytes = cpu_mesh.indices.size() * sizeof(CpuMesh::IndexType);
+    auto vtx_buf_size_bytes = cpu_mesh.vertices.size() * sizeof(GpuMesh::VertexType);
+    auto idx_buf_size_bytes = cpu_mesh.indices.size() * sizeof(GpuMesh::IndexType);
 
     // 1. make mapped, cpu accessible staging buffer
 //    LOG_DBG_EXPR(vtx_buf_size_bytes);
@@ -91,7 +90,6 @@ GpuMesh VkEngine::upload_gpu_mesh(CpuMesh const& cpu_mesh){
     // 3. copy data from staging buffer into vertex and index buffer
     copy_buffer(stagingBuffer.buffer, mesh.vertices.buffer, vtx_buf_size_bytes, 0);
     copy_buffer(stagingBuffer.buffer, mesh.indices.buffer, idx_buf_size_bytes, vtx_buf_size_bytes);
-
-
+    stagingBuffer.clear();
     return mesh;
 }

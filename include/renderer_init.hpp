@@ -4,10 +4,10 @@
 #include "SDL3/SDL_video.h"
 #include "Texture2D.hpp"
 #include "vk_managed_buffers.hpp"
-#include "vk_buffers_helpers.hpp"
+#include "renderer_buffer_helpers.hpp"
 #include "vk_frame_data.hpp"
 #include "vk_types.hpp"
-#include "vk_init_helpers.hpp"
+#include "renderer_init_helpers.hpp"
 #include "vk_debug.hpp"
 #include "vk_swapchain.hpp"
 

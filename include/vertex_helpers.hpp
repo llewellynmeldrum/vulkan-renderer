@@ -2,8 +2,8 @@
 
 #include "glm/detail/qualifier.hpp"
 #include "glm/glm.hpp"
-
 #include "vk_types.hpp"
+
 namespace vtx_helpers{
     
 // type trait for converting from C++ types to `vk::Format`. 

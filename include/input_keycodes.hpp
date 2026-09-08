@@ -1,6 +1,40 @@
 #pragma once 
-namespace KeyCode{
-enum KeyCode{
+#include "types.hpp"
+#include "bitmask_flags.hpp"
+#include "common_concepts.hpp"
+#include <format>
+#include <type_traits>
+
+enum struct KeyModBits : u32{
+    NONE   = 0x0000u,                           /**< no modifier is applicable. */
+    LSHIFT = 0x0001u,                           /**< the left Shift key is down. */
+    RSHIFT = 0x0002u,                           /**< the right Shift key is down. */
+    LEVEL5 = 0x0004u,                           /**< the Level 5 Shift key is down. */
+    LCTRL  = 0x0040u,                           /**< the left Ctrl (Control) key is down. */
+    RCTRL  = 0x0080u,                           /**< the right Ctrl (Control) key is down. */
+    LALT   = 0x0100u,                           /**< the left Alt key is down. */
+    RALT   = 0x0200u,                           /**< the right Alt key is down. */
+    LMETA   = 0x0400u,                          /**< the left GUI key (often the Windows key) is down. */
+    RMETA   = 0x0800u,                          /**< the right GUI key (often the Windows key) is down. */
+    NUM_LOCK    = 0x1000u,                      /**< the Num Lock key (may be located on an extended keypad) is down. */
+    CAPS_LOCK   = 0x2000u,                          /**< the Caps Lock key is down. */
+    MODE   = 0x4000u,                           /**< the !AltGr key is down. */
+    SCROLL_LOCK = 0x8000u,                          /**< the Scroll Lock key is down. */
+
+    CTRL   = (KeyModBits::LCTRL  |  KeyModBits::RCTRL)  ,                           /**< Any Ctrl key is down. */
+    SHIFT  = (KeyModBits::LSHIFT |  KeyModBits::RSHIFT),                            /**< Any Shift key is down. */
+    ALT    = (KeyModBits::LALT   |  KeyModBits::RALT)    ,                          /**< Any Alt key is down. */
+    META   = (KeyModBits::LMETA   | KeyModBits::RMETA)    ,                           /**< Any GUI key is down. */
+};
+using KeyMod = Flags<KeyModBits>;
+template<>
+struct enum_bitwise_or_opt_in<KeyMod> {
+    static constexpr inline bool enabled = true;
+};
+
+
+
+enum struct KeyCode : u32{
     UNKNOWN = 0,
 
     /**
@@ -375,4 +409,14 @@ enum KeyCode{
     COUNT = 512 /**< not a key, just marks the number of scancodes for array bounds */
 
 };
+namespace detail{
+static constexpr auto name_table = std::array{
+    "UNKNOWN", "N/A", "N/A", "N/A", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "ZERO", "RETURN", "ESCAPE", "BACKSPACE", "TAB", "SPACE", "MINUS", "EQUALS", "LEFTBRACKET", "RIGHTBRACKET", "BACKSLASH", "NONUSHASH", "SEMICOLON", "APOSTROPHE", "GRAVE", "COMMA", "PERIOD", "SLASH", "CAPSLOCK", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "PRINTSCREEN", "SCROLLLOCK", "PAUSE", "INSERT", "HOME", "PAGEUP", "DELETE", "END", "PAGEDOWN", "RIGHT", "LEFT", "DOWN", "UP", "NUMLOCKCLEAR", "KP_DIVIDE", "KP_MULTIPLY", "KP_MINUS", "KP_PLUS", "KP_ENTER", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_6", "KP_7", "KP_8", "KP_9", "KP_0", "KP_PERIOD", "NONUSBACKSLASH", "APPLICATION", "POWER", "KP_EQUALS", "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "EXECUTE", "HELP", "MENU", "SELECT", "STOP", "AGAIN", "UNDO", "CUT", "COPY", "PASTE", "FIND", "MUTE", "VOLUMEUP", "VOLUMEDOWN", "LOCKINGCAPSLOCK", "LOCKINGNUMLOCK", "LOCKINGSCROLLLOCK", "KP_COMMA", "KP_EQUALSAS400", "INTERNATIONAL1", "INTERNATIONAL2", "INTERNATIONAL3", "INTERNATIONAL4", "INTERNATIONAL5", "INTERNATIONAL6", "INTERNATIONAL7", "INTERNATIONAL8", "INTERNATIONAL9", "LANG1", "LANG2", "LANG3", "LANG4", "LANG5", "LANG6", "LANG7", "LANG8", "LANG9", "ALTERASE", "SYSREQ", "CANCEL", "CLEAR", "PRIOR", "RETURN2", "SEPARATOR", "OUT", "OPER", "CLEARAGAIN", "CRSEL", "EXSEL", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "KP_00", "KP_000", "THOUSANDSSEPARATOR", "DECIMALSEPARATOR", "CURRENCYUNIT", "CURRENCYSUBUNIT", "KP_LEFTPAREN", "KP_RIGHTPAREN", "KP_LEFTBRACE", "KP_RIGHTBRACE", "KP_TAB", "KP_BACKSPACE", "KP_A", "KP_B", "KP_C", "KP_D", "KP_E", "KP_F", "KP_XOR", "KP_POWER", "KP_PERCENT", "KP_LESS", "KP_GREATER", "KP_AMPERSAND", "KP_DBLAMPERSAND", "KP_VERTICALBAR", "KP_DBLVERTICALBAR", "KP_COLON", "KP_HASH", "KP_SPACE", "KP_AT", "KP_EXCLAM", "KP_MEMSTORE", "KP_MEMRECALL", "KP_MEMCLEAR", "KP_MEMADD", "KP_MEMSUBTRACT", "KP_MEMMULTIPLY", "KP_MEMDIVIDE", "KP_PLUSMINUS", "KP_CLEAR", "KP_CLEARENTRY", "KP_BINARY", "KP_OCTAL", "KP_DECIMAL", "KP_HEXADECIMAL", "N/A", "N/A", "LCTRL", "LSHIFT", "LALT", "LGUI", "RCTRL", "RSHIFT", "RALT", "RGUI", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "MODE", "SLEEP", "WAKE", "CHANNEL_INCREMENT", "CHANNEL_DECREMENT", "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_RECORD", "MEDIA_FAST_FORWARD", "MEDIA_REWIND", "MEDIA_NEXT_TRACK", "MEDIA_PREVIOUS_TRACK", "MEDIA_STOP", "MEDIA_EJECT", "MEDIA_PLAY_PAUSE", "MEDIA_SELECT", "AC_NEW", "AC_OPEN", "AC_CLOSE", "AC_EXIT", "AC_SAVE", "AC_PRINT", "AC_PROPERTIES", "AC_SEARCH", "AC_HOME", "AC_BACK", "AC_FORWARD", "AC_STOP", "AC_REFRESH", "AC_BOOKMARKS", "SOFTLEFT", "SOFTRIGHT", "CALL", "ENDCALL", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "RESERVED", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
+}; 
+
+}// namespace detail
+static consteval inline std::string_view to_string(u32 val){
+    ASSERT(val>0);
+    ASSERT(val < static_cast<u32>(KeyCode::COUNT));
+    return detail::name_table[val];
 }

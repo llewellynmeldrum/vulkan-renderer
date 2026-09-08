@@ -1,5 +1,8 @@
-#include "vk_engine.hpp"
-void VkEngine::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf){
+#include "renderer.hpp"
+auto 
+Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf)
+-> void
+{
     cmdBuf.end();
     m_vkQueue.submit(
         vk::SubmitInfo{}
@@ -8,7 +11,10 @@ void VkEngine::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf){
     m_vkQueue.waitIdle();
 }
 
-auto VkEngine::begin_single_use_cmd() -> vk::raii::CommandBuffer{
+auto 
+Renderer::begin_single_use_cmd() 
+-> vk::raii::CommandBuffer
+{
     auto cmdBuf =  std::move(vk::raii::CommandBuffers(
             m_vkDevice,
             vk::CommandBufferAllocateInfo{}
