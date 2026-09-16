@@ -1,6 +1,8 @@
 #pragma once 
-#include "shared_transformations.hpp"
 #include <unordered_map>
+
+#include "renderer2d.hpp"
+#include "shared_transformations.hpp"
 #include "renderer_types.hpp"
 #include "mesh_id.hpp"
 
@@ -14,6 +16,7 @@ struct Renderer {
     static constexpr bool                k_useValidationLayers{true};
 
 
+    Renderer2D                          m_rend2d;
     // handles 
     VmaAllocator                         m_allocator;
     SDL_Window*                          m_window{};
@@ -27,28 +30,22 @@ struct Renderer {
 
     // vulkan types
 
-    // mesh soas 
-    std::unordered_map<MeshID, GpuMesh>     m_gpu_meshes;
+    // 3d mesh soas 
+    std::unordered_map<MeshID, GpuMesh3D>     m_gpu_meshes3d;
     std::unordered_map<MeshID, glm::mat4x4> m_model_matrices;
 
-    auto upload_mesh(
+    auto upload_mesh2d() -> void;
+    auto upload_mesh3d(
         MeshID id,
-        CpuMesh cpu_mesh,
+        CpuMesh3D cpu_mesh,
         glm::mat4x4 model_matrix = glm::mat4x4(1.0f)
-    ) -> void {
-        LOG_DBG("Uploading mesh id={}, vtx:{},idx:{}",id, cpu_mesh.vertices.size(), cpu_mesh.indices.size());
-        m_model_matrices.insert_or_assign(id, model_matrix);
-        auto gpu_slot = m_gpu_meshes.find(id);
-        bool mesh_already_on_gpu = gpu_slot != m_gpu_meshes.end();
-        if (mesh_already_on_gpu){
-            // naiive approach, delete the old one and replace it entirely
-            gpu_slot->second.clear();
-            m_gpu_meshes.insert_or_assign(gpu_slot, id, create_gpu_mesh(cpu_mesh));
-        } else{
-            auto [it, inserted] = m_gpu_meshes.try_emplace(id, create_gpu_mesh(cpu_mesh));
-            ASSERT(inserted);
-        }
-    }
+    ) -> void ;
+
+    auto make_gpu_mesh(CpuMesh2D const& cpu_mesh) -> GpuMesh2D;
+    auto make_gpu_mesh(CpuMesh3D const& cpu_mesh) -> GpuMesh3D;
+
+    template<typename tVertexType, typename tIndexType>
+    auto make_gpu_mesh_impl(CpuMesh<tVertexType,tIndexType> const& cpu_mesh) -> GpuMesh<tVertexType,tIndexType>;
 
     u32                                  m_vkQueueFamily{};
 
@@ -73,6 +70,7 @@ struct Renderer {
 
     ShaderPipelineContext                m_fill_pipeline{};
     ShaderPipelineContext                m_line_pipeline{};
+    ShaderPipelineContext                m_2d_pipeline{};
 
     // dynamic vulkan state
     vk::PolygonMode                      m_vkPolygonMode {vk::PolygonMode::eFill};
@@ -102,18 +100,19 @@ struct Renderer {
     auto record_commands(
         Camera const& cam,
         FrameData const& frame, u32 imageIndex
-    ) 
-    -> void;
+    ) -> void;
 
     auto set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf) 
     -> void;
 
 
-    auto get_current_frame() 
-    -> FrameData&;
+    auto& get_current_frame(this auto& self) {
+        return self.m_inflightFrames.at(self.get_current_frame_index());
+    }
 
+    [[nodiscard]]
     auto get_current_frame_index() 
-    -> u32;
+    const -> u32;
 
     auto is_initialized() 
     -> bool;
@@ -138,45 +137,37 @@ struct Renderer {
     auto handle_window_resize(glm::vec2 new_logical_extent) 
     -> void;
         
+    auto 
+    copy_buffer(
+        vk::Buffer const & src,
+        vk::Buffer const& dst,
+        vk::DeviceSize size,
+        vk::DeviceSize offset=0
+    ) const -> void;
   private:
-    auto draw_mesh_pass(
-        GpuMesh const& gpu_mesh,
+    auto prepare_pass(
         vk::raii::CommandBuffer const& cmdBuf,
         ShaderPipelineContext const& pipeline, 
         u32 frameIndex, 
         vk::PolygonMode poly_mode
     ) -> void;
 
-    auto recreate_swapchain() 
-    -> void;
+    auto recreate_swapchain() -> void;
 
-    auto init_vulkan() 
-    -> void;
+    auto init_vulkan() -> void;
 
-    auto init_fill_pipeline(vk::raii::ShaderModule const& shader_module) 
-    -> void;
+    auto init_fill_pipeline(vk::raii::ShaderModule const& shader_module) -> void;
+    auto init_line_pipeline(vk::raii::ShaderModule const& shader_module) -> void;
+    auto init_2d_pipeline(vk::raii::ShaderModule const& shader_module) -> void;
 
-    auto init_line_pipeline(vk::raii::ShaderModule const& shader_module) 
-    -> void;
+    auto init_texture() -> void;
 
-    auto init_texture() 
-    -> void;
-
-    auto init_sync_structures() 
-    -> void;
-
-//    auto init_heightmap() 
-//    -> void;
-//
-//    auto upload_heightmap() 
-//    -> void;
+    auto init_sync_structures() -> void;
 
     auto upload_mesh_data(
-        std::span<const GpuMesh::VertexType> in_vertices,
-        std::span<const GpuMesh::IndexType> in_indices
-    )->void;
-    auto create_gpu_mesh(CpuMesh const& cpu_mesh)
-    -> GpuMesh;
+        std::span<const GpuMesh3D::VertexType> in_vertices,
+        std::span<const GpuMesh3D::IndexType> in_indices
+    ) -> void;
 
     // drawing shit
     auto 
@@ -186,21 +177,14 @@ struct Renderer {
         glm::mat4x4 model_matrix
     ) -> void;
 
-    auto 
-    copy_buffer(
-        vk::Buffer const & src,
-        vk::Buffer const& dst,
-        vk::DeviceSize size,
-        vk::DeviceSize offset=0
-    ) -> void;
 
     auto
     begin_single_use_cmd() 
-    -> vk::raii::CommandBuffer;
+    const -> vk::raii::CommandBuffer;
 
     auto 
     end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) 
-    -> void;
+    const -> void;
 
     auto get_viewport() const
     -> vk::Viewport;

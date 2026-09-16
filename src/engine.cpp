@@ -1,5 +1,7 @@
 #include "engine.hpp"
 #include "SDL3/SDL_events.h"
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_oldnames.h"
 #include "magic_enum.hpp"
 #include <print>
 auto Engine::init()
@@ -32,6 +34,7 @@ void Engine::run(){
         }
         if (m_shouldRender) {
             rend.draw(cam);
+           // use sdl builtins and draw a circle, have a define mode or something to switch to 2d, or just make a new project really quickk (better idea) SDL_RenderRect(SDL_GetRendererr) ;
         } else{
             std::this_thread::sleep_for(100ms);
         }

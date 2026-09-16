@@ -54,4 +54,4 @@ struct HeightMapMeshCreateInfo {
     u32 num_x_samples;
     u32 num_z_samples;
 };
-CpuMesh mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo meshInfo);
+CpuMesh3D mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo meshInfo);

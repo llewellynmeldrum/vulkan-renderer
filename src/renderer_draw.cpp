@@ -117,13 +117,13 @@ auto Renderer::prepare_render_attachments(
 
     return {attachmentInfo, depthAttachmentInfo};
 }
-
-void record_mesh_draw_cmds(vk::raii::CommandBuffer const& cmdBuf, GpuMesh const& gpu_mesh){
+template<typename MeshType>
+void draw_mesh(vk::raii::CommandBuffer const& cmdBuf, MeshType const& gpu_mesh){
     ASSERT(gpu_mesh.m_vertex_count!= 0);
-    cmdBuf.bindVertexBuffers(0, gpu_mesh.vertices.buffer, {0});
+    cmdBuf.bindVertexBuffers(0, gpu_mesh.m_vertices.buffer, {0});
 
     ASSERT(gpu_mesh.m_index_count != 0);
-    cmdBuf.bindIndexBuffer(gpu_mesh.indices.buffer, 0, gpu_mesh.index_type);
+    cmdBuf.bindIndexBuffer(gpu_mesh.m_indices.buffer, 0, gpu_mesh.m_index_type);
 
     cmdBuf.drawIndexed(gpu_mesh.m_index_count, 1, 0,0,0);
 }
@@ -147,8 +147,7 @@ auto Renderer::record_commands(
     Camera const& cam,
     FrameData const& frame,
     u32 imageIndex
-)
--> void {
+) -> void {
     auto const& cmdBuf = frame.commandBuffer;
     auto const frameIndex = get_current_frame_index();
     auto const& swapchainImage = m_swapchain.images.at(imageIndex);
@@ -168,12 +167,18 @@ auto Renderer::record_commands(
     cmdBuf.beginRendering(renderAttachments.get_info(m_swapchain));
 
 
-    for (const auto& [id, gpu_mesh]: m_gpu_meshes){
+    for (const auto& [id, gpu_mesh]: m_gpu_meshes3d){
         LOG_DBG("Drawing mesh id={}, vtx:{},idx:{}",id,gpu_mesh.m_vertex_count, gpu_mesh.m_index_count);
         auto model_matrix = m_model_matrices.at(id);
         upload_model_matrix(frame.uniformBufferMappedMemory, model_matrix);
-        draw_mesh_pass(gpu_mesh, cmdBuf,m_fill_pipeline,frameIndex,vk::PolygonMode::eFill);
-        draw_mesh_pass(gpu_mesh, cmdBuf,m_line_pipeline,frameIndex,vk::PolygonMode::eLine);
+
+        prepare_pass(cmdBuf,m_fill_pipeline,frameIndex,vk::PolygonMode::eFill);
+        draw_mesh(cmdBuf, gpu_mesh);
+
+        prepare_pass(cmdBuf,m_line_pipeline,frameIndex,vk::PolygonMode::eLine);
+        draw_mesh(cmdBuf, gpu_mesh);
+
+        draw_mesh(cmdBuf, gpu_mesh);
     }
 
     cmdBuf.endRendering();
@@ -211,8 +216,7 @@ auto Renderer::present_image(
         ASSERT(present_rv==vk::Result::eSuccess);
     }
 }
-auto Renderer::draw_mesh_pass(
-    GpuMesh const& gpu_mesh,
+auto Renderer::prepare_pass(
     vk::raii::CommandBuffer const& cmdBuf,
     ShaderPipelineContext const&  pipeline, 
     u32 frameIndex, 
@@ -230,8 +234,6 @@ auto Renderer::draw_mesh_pass(
         nullptr
     );
     cmdBuf.setPolygonModeEXT(poly_mode);
-
-    record_mesh_draw_cmds(cmdBuf, gpu_mesh);
 }
 
 struct AcquiredImage{

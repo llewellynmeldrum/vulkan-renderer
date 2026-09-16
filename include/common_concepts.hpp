@@ -11,7 +11,6 @@ template<typename T>
 concept is_enum = std::is_enum_v<T>;
 
 
-
 namespace variadic{
 
 template<typename... Args>

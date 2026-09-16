@@ -1,7 +1,7 @@
 #include "renderer.hpp"
 auto 
 Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf)
--> void
+const -> void
 {
     cmdBuf.end();
     m_vkQueue.submit(
@@ -13,7 +13,7 @@ Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf)
 
 auto 
 Renderer::begin_single_use_cmd() 
--> vk::raii::CommandBuffer
+const -> vk::raii::CommandBuffer
 {
     auto cmdBuf =  std::move(vk::raii::CommandBuffers(
             m_vkDevice,

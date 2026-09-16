@@ -5,12 +5,21 @@
 #include "glm_types.hpp"
 #include "vk_types.hpp"
 
-struct Vertex{
+struct Vertex3D{
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
     static constexpr auto N_ATTRIBUTES{3uz};
 };
+
+struct Vertex2D{
+    glm::vec2 pos;
+    glm::vec4 color;
+    glm::vec2 texCoord;
+    static constexpr auto N_ATTRIBUTES{3uz};
+};
+
+
 
 
 

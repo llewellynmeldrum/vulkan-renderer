@@ -1,6 +1,7 @@
 #pragma once 
 #include "vk_managed_buffers.hpp"
 #include "vk_types.hpp"
+#include "vulkan/vulkan.hpp"
 namespace detail::helpers{
 [[nodiscard]] inline auto select_memory_type(
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
@@ -104,9 +105,7 @@ make_shader_module(
         },
     };
 }
-[[nodiscard]] inline auto
-no_blend(
-)
+[[nodiscard]] inline auto no_blend() -> vk::PipelineColorBlendAttachmentState
 {
     return vk::PipelineColorBlendAttachmentState{
         .blendEnable = vk::False,
@@ -116,6 +115,27 @@ no_blend(
         .colorBlendOp        = vk::BlendOp::eAdd,
 
         .srcAlphaBlendFactor = vk::BlendFactor::eOne, .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+        .alphaBlendOp        = vk::BlendOp::eAdd,
+
+        .colorWriteMask = vk::ColorComponentFlagBits::eR 
+            | vk::ColorComponentFlagBits::eG
+            | vk::ColorComponentFlagBits::eB
+            | vk::ColorComponentFlagBits::eA
+    };
+}
+
+[[nodiscard]] inline auto alpha_blend() -> vk::PipelineColorBlendAttachmentState
+{
+    return vk::PipelineColorBlendAttachmentState{
+        .blendEnable = vk::True,
+        .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha, 
+        .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+
+        .colorBlendOp        = vk::BlendOp::eAdd,
+
+        .srcAlphaBlendFactor = vk::BlendFactor::eOne, 
+        .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+
         .alphaBlendOp        = vk::BlendOp::eAdd,
 
         .colorWriteMask = vk::ColorComponentFlagBits::eR 

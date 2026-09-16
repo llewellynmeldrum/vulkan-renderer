@@ -27,7 +27,7 @@ void Renderer::recreate_swapchain() {
     m_requiresSwapchainRecreation = false;
 }
 
-void Renderer::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset){
+void Renderer::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset) const{
     auto cmdCopyBuf = begin_single_use_cmd();
     cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=offset, .dstOffset = 0, .size=size});
     end_single_use_cmd(std::move(cmdCopyBuf));
@@ -37,12 +37,12 @@ bool Renderer::is_initialized() {
     return m_window; 
 }
 
-u32 Renderer::get_current_frame_index(){
+[[nodiscard]]
+auto Renderer::get_current_frame_index()
+const -> u32{
     return m_frameCount % k_syncFrameCount;
 }
-FrameData& Renderer::get_current_frame() {
-    return m_inflightFrames.at(get_current_frame_index());
-}
+
 [[nodiscard]]
 vk::Extent2D Renderer::get_framebuffer_size() const noexcept{
     int w{},h{};

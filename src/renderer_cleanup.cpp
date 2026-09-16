@@ -10,6 +10,7 @@ void Renderer::cleanup() {
         }
         m_vkQueue.clear();
         m_line_pipeline.clear();
+        m_2d_pipeline.clear();
         m_fill_pipeline.clear();
 
 
@@ -21,9 +22,10 @@ void Renderer::cleanup() {
         m_vkPhysicalDevice.clear();
         m_vkSurface.clear();
 
-        for (auto& [id, gpu_mesh]: m_gpu_meshes){
+        for (auto& [id, gpu_mesh]: m_gpu_meshes3d){
             gpu_mesh.clear();
         }
+        m_rend2d.clear();
 
         cleanup_vma();
         m_window = nullptr;

@@ -211,8 +211,7 @@ make_vma_allocator(
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
     vk::raii::Device const& m_vkDevice,
     vk::raii::Instance const& m_vkInstance
-) -> VmaAllocator
-{
+) -> VmaAllocator {
     auto m_allocator = VmaAllocator{};
     auto vma_vulkan_functions = VmaVulkanFunctions{
         .vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr )SDL_Vulkan_GetVkGetInstanceProcAddr(),

@@ -1,23 +1,20 @@
+
+#include <print>
 #include "heightmap.hpp"
 #include "logger.hpp"
 #include "minmax.hpp"
 
-#include "FastNoiseLite.h"
-#include <print>
+#include <FastNoiseLite.h>
+#include "color_utils.hpp"
+#include "vertex_raw_data.hpp"
 static constexpr auto N_CORNERS{4};
-CpuMesh mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo meshInfo){
-    auto mesh = CpuMesh{};
+CpuMesh3D mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo meshInfo){
+    auto mesh = CpuMesh3D{};
     // Start with a quad which simply samples at each corner point 
     
     auto color_from_y = [&heightmap](f32 y){
         auto val = heightmap.m_boundsY.unlerp(y);
         return glm::vec3{val,val,val};
-    };
-    auto white_quad_colors = std::array<glm::vec3,4>{
-        glm::vec3{1.0f,1.0f,1.0f},
-        glm::vec3{1.0f,1.0f,1.0f},
-        glm::vec3{1.0f,1.0f,1.0f},
-        glm::vec3{1.0f,1.0f,1.0f},
     };
     auto const hextentX = heightmap.m_extentX * 0.5f;
     auto const hextentZ = heightmap.m_extentZ * 0.5f;
@@ -45,22 +42,23 @@ CpuMesh mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo meshI
             auto const x1 = ox + x_subquad_extent * (ix+1);
             auto const z0 = oz + z_subquad_extent * iz;
             auto const z1 = oz + z_subquad_extent * (iz+1);
-            auto corners_xz = std::array{
+            auto const corners_xz = std::array{
                 vec2xz{x0, z0},
                 vec2xz{x1, z0},
                 vec2xz{x1, z1},
                 vec2xz{x0, z1},
             };
-            auto corners_xyz = std::array<glm::vec3,4>{};
-            auto colors = std::array<glm::vec3,4>{};
+
+            auto out_vertices  = std::array<Vertex3D,4>{};
             for (i32 i = 0; i<N_CORNERS ; i++){
                 auto const x = corners_xz[i].x;
                 auto const z = corners_xz[i].z;
                 auto const y = heightmap.sample_height(x,z);
-                corners_xyz[i] = {x,y,z};
-                colors[i] = color_from_y(y);
+                out_vertices[i].pos = {x,y,z};
+                out_vertices[i].color = color_from_y(y);
+                out_vertices[i].texCoord = vtx_raw_data::ccw_quad_verts[i].texCoord;
             }
-            mesh.add_quad(corners_xyz,colors);
+            mesh.add_quad(out_vertices);
         }
     }
 
@@ -77,13 +75,15 @@ CpuMesh mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo meshI
         vec2xz{x1, z1},
         vec2xz{x0, z1},
     };
-    auto flat_bottom = std::array<glm::vec3,4>{};
+    auto out_vertices  = std::array<Vertex3D,4>{};
     for (i32 i = 0; i<N_CORNERS ; i++){
-        auto const wx = corners_xz[i].x;
-        auto const wz = corners_xz[i].z;
-        auto const wy = -heightmap.m_boundsY.range()/2.0f;
-        flat_bottom[i] = {wx,wy,wz};
+        auto const x = corners_xz[i].x;
+        auto const z = corners_xz[i].z;
+        auto const y = -heightmap.m_boundsY.range()/2.0f;
+        out_vertices[i].pos = {x,y,z};
+        out_vertices[i].color = make_rgb(255,255,255);
+        out_vertices[i].texCoord = vtx_raw_data::ccw_quad_verts[i].texCoord;
     }
-    mesh.add_quad(flat_bottom,white_quad_colors);
+    mesh.add_quad(out_vertices);
     return mesh;
 }

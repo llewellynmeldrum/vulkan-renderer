@@ -116,6 +116,7 @@ void Renderer::init_vulkan() {
             auto shader_module = detail::helpers::make_shader_module(m_vkDevice, shader_src);
             init_fill_pipeline(shader_module);
             init_line_pipeline(shader_module);
+            init_2d_pipeline(shader_module);
         }
 
         {
@@ -242,12 +243,12 @@ auto make_shader_pipeline(ShaderPipelineCreateInfo info){
     };
 }
 void Renderer::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
-    m_line_pipeline = make_shader_pipeline<Vertex>(
+    m_line_pipeline = make_shader_pipeline<Vertex3D>(
         ShaderPipelineCreateInfo {
             .device                  = m_vkDevice,
             .shader_module           = shader_module,
-            .vertex_fn_name          = "vertWireframe",
-            .frag_fn_name            = "fragWireframe",
+            .vertex_fn_name          = "fragWireframe",
+            .frag_fn_name            = "vertWireframe",
             .enabled_dynamic_states  = vk_enabledDynamicState,
             .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eLine,
@@ -266,8 +267,37 @@ void Renderer::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
 
 }
 
+// TODO: 
+// Currently finishing up the beginning of the 2d pipeline
+// -> most everything is done, except the shader. I Have also not decided if the 2d pipeline should use the same
+// shader module.
+auto Renderer::init_2d_pipeline(vk::raii::ShaderModule const& shader_module) -> void{
+    m_line_pipeline = make_shader_pipeline<Vertex3D>(
+        ShaderPipelineCreateInfo {
+            .device                  = m_vkDevice,
+            .shader_module           = shader_module,
+            .vertex_fn_name          = "vert2d",
+            .frag_fn_name            = "frag2d",
+            .enabled_dynamic_states  = vk_enabledDynamicState,
+            .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
+            .poly_mode               = vk::PolygonMode::eFill,
+            .cull_mode               = vk::CullModeFlagBits::eNone,
+            .color_image_format      = m_swapchain.imageFormat,
+            .depth_image_format      = DepthAttachment::select_depth_format(),
+
+            .depth_write             = false,
+            .depth_test              = true,
+            // Normally, this would be lessOrEqual, but we have a flipped Z.
+            .depth_compar            = vk::CompareOp::eGreaterOrEqual,
+            .blend                   = detail::helpers::alpha_blend(),
+            .depth_bias              = false,
+        }
+    );
+
+}
+
 void Renderer::init_fill_pipeline(vk::raii::ShaderModule const& shader_module) {
-    m_fill_pipeline = make_shader_pipeline<Vertex>(
+    m_fill_pipeline = make_shader_pipeline<Vertex3D>(
         ShaderPipelineCreateInfo {
             .device                  = m_vkDevice,
             .shader_module           = shader_module,
