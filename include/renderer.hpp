@@ -1,7 +1,9 @@
 #pragma once 
 #include <unordered_map>
 
+#include "push_constants.hpp"
 #include "renderer2d.hpp"
+#include "renderer_buffer_helpers.hpp"
 #include "shared_transformations.hpp"
 #include "renderer_types.hpp"
 #include "mesh_id.hpp"
@@ -10,7 +12,7 @@ FWD_DECL_STRUCT(SDL_Window);
 FWD_DECL_STRUCT(SDL_KeyboardEvent);
 struct Renderer {
   public:
-    static constexpr auto                k_shader_spirv_path = "shaders/slang.spv"sv;
+    static constexpr auto                k_shader_spirv_path = "shaders/bin/main_shaders.spv"sv;
     static constexpr u32                 k_syncFrameCount = 2;
     static constexpr u32                 k_API_VER = vk::ApiVersion13;
     static constexpr bool                k_useValidationLayers{true};
@@ -68,9 +70,9 @@ struct Renderer {
     Texture2D                            m_texture{nullptr};
     DepthAttachment                      m_depthImage{nullptr};
 
-    ShaderPipelineContext                m_fill_pipeline{};
-    ShaderPipelineContext                m_line_pipeline{};
-    ShaderPipelineContext                m_2d_pipeline{};
+    Pipeline<PushConstants::None>                m_fill_pipeline{};
+    Pipeline<PushConstants::None>                m_line_pipeline{};
+    Pipeline<PushConstants::Transform2D>         m_2d_pipeline{};
 
     // dynamic vulkan state
     vk::PolygonMode                      m_vkPolygonMode {vk::PolygonMode::eFill};
@@ -145,20 +147,19 @@ struct Renderer {
         vk::DeviceSize offset=0
     ) const -> void;
   private:
-    auto prepare_pass(
-        vk::raii::CommandBuffer const& cmdBuf,
-        ShaderPipelineContext const& pipeline, 
-        u32 frameIndex, 
-        vk::PolygonMode poly_mode
-    ) -> void;
+//    auto prepare_pass(
+//        vk::raii::CommandBuffer const& cmdBuf,
+//        Pipeline const& pipeline, 
+//        u32 frameIndex
+//    ) -> void;
 
     auto recreate_swapchain() -> void;
 
     auto init_vulkan() -> void;
 
-    auto init_fill_pipeline(vk::raii::ShaderModule const& shader_module) -> void;
-    auto init_line_pipeline(vk::raii::ShaderModule const& shader_module) -> void;
-    auto init_2d_pipeline(vk::raii::ShaderModule const& shader_module) -> void;
+    auto init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) -> void;
+    auto init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) -> void;
+    auto init_2d_pipeline  (detail::helpers::ShaderModuleWrapper const& shader) -> void;
 
     auto init_texture() -> void;
 

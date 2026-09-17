@@ -14,7 +14,18 @@ public:
     using VertexType = tVertexType;
     using QuadVerticesType = QuadVertices<VertexType>;
 
-    void add_quad(QuadVerticesType const& in_vertices);
+    auto add_quad(std::span<const VertexType,4> in_vertices)
+    -> void{
+        auto index_offset = vertices.size();
+
+        vertices.append_range(in_vertices);
+        for (int i = 0; i<CpuMesh::IndicesPerQuad; i++){
+            auto index = index_offset + vtx_raw_data::ccw_quad_indices[i];
+            ASSERT(index < vertices.size());
+            indices.emplace_back(index);
+        }
+        m_quad_count++;
+    }
 
 
     std::vector<VertexType> vertices;
@@ -26,15 +37,3 @@ using CpuMesh3D = CpuMesh<Vertex3D, u32>;
 using CpuMesh2D = CpuMesh<Vertex2D, u32>;
 
 
-template<typename tVertexType, typename tIndexType>
-void CpuMesh<tVertexType, tIndexType>::add_quad(QuadVerticesType const& in_vertices){
-    auto index_offset = vertices.size();
-
-    vertices.append_range(in_vertices.span());
-    for (int i = 0; i<CpuMesh::IndicesPerQuad; i++){
-        auto index = index_offset + vtx_raw_data::ccw_quad_indices[i];
-        ASSERT(index < vertices.size());
-        indices.emplace_back(index);
-    }
-    m_quad_count++;
-}

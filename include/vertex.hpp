@@ -16,6 +16,9 @@ struct Vertex2D{
     glm::vec2 pos;
     glm::vec4 color;
     glm::vec2 texCoord;
+    glm::vec2 shape_center_pos{};
+    u32 shapeID{0};
+
     static constexpr auto N_ATTRIBUTES{3uz};
 };
 

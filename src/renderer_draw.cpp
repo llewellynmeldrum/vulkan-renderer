@@ -2,6 +2,8 @@
 #include <ranges>
 #include <thread>
 
+#include "color_utils.hpp"
+#include "push_constants.hpp"
 #include "vertex_raw_data.hpp"
 #include "vk_managed_buffers.hpp"
 #include "renderer.hpp"
@@ -167,19 +169,35 @@ auto Renderer::record_commands(
     cmdBuf.beginRendering(renderAttachments.get_info(m_swapchain));
 
 
+    // Render 3d 
+    auto const& frame_descriptorSets = m_vkDescriptorSets[frameIndex];
     for (const auto& [id, gpu_mesh]: m_gpu_meshes3d){
         LOG_DBG("Drawing mesh id={}, vtx:{},idx:{}",id,gpu_mesh.m_vertex_count, gpu_mesh.m_index_count);
         auto model_matrix = m_model_matrices.at(id);
         upload_model_matrix(frame.uniformBufferMappedMemory, model_matrix);
 
-        prepare_pass(cmdBuf,m_fill_pipeline,frameIndex,vk::PolygonMode::eFill);
+        m_fill_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
         draw_mesh(cmdBuf, gpu_mesh);
 
-        prepare_pass(cmdBuf,m_line_pipeline,frameIndex,vk::PolygonMode::eLine);
+        m_line_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
         draw_mesh(cmdBuf, gpu_mesh);
 
-        draw_mesh(cmdBuf, gpu_mesh);
     }
+
+    auto transform2d = PushConstants::Transform2D{
+        // scale should take logical screen pos in and output ndc normalized.
+        // shader does: logical_pos * scale + translate
+        // To get -1,-1 TL and +1,+1 BR, and 0,0 center, we must :
+        // 1. multiply logical_pos by 2, and divide that by window extent.
+        //  -> this gives us 0,0 TL, 2,2 BR, 1,1 center.
+        .scale = glm::vec2( 2.0 ) / m_windowLogicalExtent,
+
+        // 2. subtract 1 from all of these points and you get -1,-1 TL, 1,1 BR, 0,0 center.
+        .translate = glm::vec2(-1.0f)
+    };
+    m_2d_pipeline.push(cmdBuf,transform2d);
+    m_2d_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
+    draw_mesh(cmdBuf, m_rend2d.m_gpu_mesh);
 
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
@@ -215,25 +233,6 @@ auto Renderer::present_image(
     }else{
         ASSERT(present_rv==vk::Result::eSuccess);
     }
-}
-auto Renderer::prepare_pass(
-    vk::raii::CommandBuffer const& cmdBuf,
-    ShaderPipelineContext const&  pipeline, 
-    u32 frameIndex, 
-    vk::PolygonMode poly_mode
-) -> void{
-    cmdBuf.bindPipeline(
-        vk::PipelineBindPoint::eGraphics,
-        *pipeline.vk_pipeline
-    );
-    cmdBuf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        pipeline.layout,
-        0, 
-        *m_vkDescriptorSets[frameIndex],
-        nullptr
-    );
-    cmdBuf.setPolygonModeEXT(poly_mode);
 }
 
 struct AcquiredImage{

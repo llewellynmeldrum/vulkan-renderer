@@ -5,6 +5,8 @@
 
 #include "SDL3/SDL_vulkan.h"
 #include "heightmap.hpp"
+#include "push_constants_traits.hpp"
+#include "push_constants.hpp"
 #include "sdl3_types.hpp"
 #include "glm_types.hpp"
 
@@ -112,11 +114,21 @@ void Renderer::init_vulkan() {
 
 
         {
-            auto shader_src = read_file_contents(k_shader_spirv_path);
-            auto shader_module = detail::helpers::make_shader_module(m_vkDevice, shader_src);
-            init_fill_pipeline(shader_module);
-            init_line_pipeline(shader_module);
-            init_2d_pipeline(shader_module);
+            auto main_shaders_module = detail::helpers::make_shader_module(
+                m_vkDevice, 
+                "./shaders/bin/main_shaders.spv",
+                "main_shaders"
+            );
+
+            init_fill_pipeline(main_shaders_module);
+            init_line_pipeline(main_shaders_module);
+
+            auto shaders2d_module = detail::helpers::make_shader_module(
+                m_vkDevice, 
+                "./shaders/bin/shaders2d.spv",
+                "shaders2d"
+            );
+            init_2d_pipeline(shaders2d_module);
         }
 
         {
@@ -138,80 +150,55 @@ void Renderer::cleanup_vma()const noexcept{
 
 
 
-template<typename VertexType>
-auto make_shader_pipeline(ShaderPipelineCreateInfo info){
 
-    auto vtxStageInfo = vk::PipelineShaderStageCreateInfo{}
-        .setStage(vk::ShaderStageFlagBits::eVertex)
-        .setModule(info.shader_module)
-        .setPName(info.vertex_fn_name.c_str())
-    ;
-    auto fragStageInfo = vk::PipelineShaderStageCreateInfo{}
-        .setStage(vk::ShaderStageFlagBits::eFragment)
-        .setModule(info.shader_module)
-        .setPName(info.frag_fn_name.c_str())
-    ;
-    std::array shaderStages{
-        vtxStageInfo,
-        fragStageInfo,
-    };
+
+template<typename VertexType, typename PushConstantType=PushConstants::None>
+auto make_shader_pipeline(PipelineCreateInfo info)
+-> Pipeline<PushConstantType>{
+
+    if (PipelineCreateInfo::extra_check_on_pipeline){ detail::perform_extra_pipeline_check(info); }
+    
+    auto vertexInputState = VertexInputState<VertexType>::get();
+    auto shaderStages = detail::make_shader_stages(info);
+    auto rasterizationState = detail::get_raster_state(info);
+
 
     auto dynamicState = vk::PipelineDynamicStateCreateInfo{}
-        .setDynamicStates(info.enabled_dynamic_states);
+        .setDynamicStates(info.enabled_dynamic_states)
+    ;
+    auto const inputAssemblyState =  vk::PipelineInputAssemblyStateCreateInfo{}
+        .setTopology(info.primitive_topology)
+    ;
 
-    auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{}
-        .setVertexBindingDescriptions(VertexTraits<VertexType>::binding_desc)
-        .setVertexAttributeDescriptions(VertexTraits<VertexType>::attribute_desc);
-
-
-    auto const inputAssemblyState=  vk::PipelineInputAssemblyStateCreateInfo{
-        .topology = vk::PrimitiveTopology::eTriangleList,
-    };
-
+    // In this instance, since these are both dynamic state, 
+    // we dont set them here, but rather during the draw call or smth
     auto viewportState = vk::PipelineViewportStateCreateInfo{
-        // In this instance, since these are both dynamic state, 
-        // we dont set them here, but rather during the draw call or smth
         .viewportCount = 1,
         .scissorCount = 1,
     };
-    auto rasterizationState = vk::PipelineRasterizationStateCreateInfo{}
-        .setDepthClampEnable        (vk::False)
-        .setRasterizerDiscardEnable (vk::False)
-        .setPolygonMode             (info.poly_mode)
-        .setCullMode                (info.cull_mode) 
-        .setFrontFace               (vk::FrontFace::eClockwise)
-        .setDepthBiasEnable         (info.depth_bias)
-        .setDepthBiasConstantFactor (info.depth_bias_constant)
-        .setDepthBiasSlopeFactor    (info.depth_bias_slope)
-        .setLineWidth               (1.0f)
-    ;
+
 
     auto multisamplingState = vk::PipelineMultisampleStateCreateInfo{}
         .setRasterizationSamples(vk::SampleCountFlagBits::e1)
         .setSampleShadingEnable(vk::False)
     ;
 
-    auto colorBlendAttachment = info.blend;
 
-    auto colorBlendState = vk::PipelineColorBlendStateCreateInfo{
-        .logicOpEnable = false,
-        .logicOp = vk::LogicOp::eCopy,
-    }.setAttachments(colorBlendAttachment);
+    auto colorBlendState = vk::PipelineColorBlendStateCreateInfo{}
+        .setLogicOpEnable(false)
+        .setLogicOp(vk::LogicOp::eCopy)
+        .setAttachments(info.blend)
+    ;
 
+    auto push_constant_ranges = PushConstants::Traits<PushConstantType>::ranges;
     auto pipeline_layout = vk::raii::PipelineLayout{
         info.device,
         vk::PipelineLayoutCreateInfo{}
-            .setPushConstantRangeCount(0)
+            .setPushConstantRanges(push_constant_ranges)
             .setSetLayouts(*info.m_vkDescriptorSetLayout)
     };
 
-    auto depthStencilState = vk::PipelineDepthStencilStateCreateInfo{}
-        .setDepthTestEnable(info.depth_test)
-        .setDepthWriteEnable(info.depth_write)
-        .setDepthCompareOp(info.depth_compar)
-        .setDepthBoundsTestEnable(vk::False)
-        .setStencilTestEnable(vk::False)
-    ;
+    auto depthStencilState = detail::make_depth_stencil_state(info);
 
     auto pipelineCreateInfoChain =  vk::StructureChain{
         vk::GraphicsPipelineCreateInfo{}
@@ -231,24 +218,34 @@ auto make_shader_pipeline(ShaderPipelineCreateInfo info){
         vk::PipelineRenderingCreateInfo{}
             .setColorAttachmentCount(1)
             .setPColorAttachmentFormats( &info.color_image_format)
-            .setDepthAttachmentFormat(info.depth_image_format )
+            .setDepthAttachmentFormat(info.depth_image_format)
     };
-    return ShaderPipelineContext{
-        vk::raii::Pipeline(
+    static_assert(push_constant_ranges.size() ==0 || push_constant_ranges.size() ==1, "Need to modify ctor below if this changes");
+    auto pipeline = Pipeline<PushConstantType>{
+        .vk_pipeline = vk::raii::Pipeline(
             info.device,
             nullptr,
             pipelineCreateInfoChain.template get<vk::GraphicsPipelineCreateInfo>()
         ),
-        std::move(pipeline_layout)
+        .layout = std::move(pipeline_layout),
+        .dynamic = {
+            .poly_mode = info.poly_mode
+        },
     };
+    if constexpr (!std::same_as<PushConstantType, PushConstants::None>){
+        pipeline.pc_info = push_constant_ranges.at(0);
+    }
+    return pipeline;
 }
-void Renderer::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
+void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
     m_line_pipeline = make_shader_pipeline<Vertex3D>(
-        ShaderPipelineCreateInfo {
+        PipelineCreateInfo {
+            .pipeline_name           = "main_line",
+            .shader_module_name      = shader.module_name,
+            .shader_module           = shader.module,
             .device                  = m_vkDevice,
-            .shader_module           = shader_module,
-            .vertex_fn_name          = "fragWireframe",
-            .frag_fn_name            = "vertWireframe",
+            .vertex_fn_name          = "vertWireframe",
+            .frag_fn_name            = "fragWireframe",
             .enabled_dynamic_states  = vk_enabledDynamicState,
             .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eLine,
@@ -267,17 +264,19 @@ void Renderer::init_line_pipeline(vk::raii::ShaderModule const& shader_module) {
 
 }
 
-// TODO: 
-// Currently finishing up the beginning of the 2d pipeline
-// -> most everything is done, except the shader. I Have also not decided if the 2d pipeline should use the same
-// shader module.
-auto Renderer::init_2d_pipeline(vk::raii::ShaderModule const& shader_module) -> void{
-    m_line_pipeline = make_shader_pipeline<Vertex3D>(
-        ShaderPipelineCreateInfo {
+auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
+-> void{
+    m_2d_pipeline = make_shader_pipeline<
+        Vertex2D, // vertex type 
+        PushConstants::Transform2D // push constant type
+    > (
+        PipelineCreateInfo {
+            .pipeline_name           = "2d",
+            .shader_module_name      = shader.module_name,
+            .shader_module           = shader.module,
             .device                  = m_vkDevice,
-            .shader_module           = shader_module,
-            .vertex_fn_name          = "vert2d",
-            .frag_fn_name            = "frag2d",
+            .vertex_fn_name          = "vertMain",
+            .frag_fn_name            = "fragMain",
             .enabled_dynamic_states  = vk_enabledDynamicState,
             .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eFill,
@@ -296,11 +295,13 @@ auto Renderer::init_2d_pipeline(vk::raii::ShaderModule const& shader_module) -> 
 
 }
 
-void Renderer::init_fill_pipeline(vk::raii::ShaderModule const& shader_module) {
-    m_fill_pipeline = make_shader_pipeline<Vertex3D>(
-        ShaderPipelineCreateInfo {
+void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
+    m_fill_pipeline = make_shader_pipeline<Vertex3D, PushConstants::None>(
+        PipelineCreateInfo{
+            .pipeline_name           = "main_fill",
+            .shader_module_name      = shader.module_name,
+            .shader_module           = shader.module,
             .device                  = m_vkDevice,
-            .shader_module           = shader_module,
             .vertex_fn_name          = "vertMain",
             .frag_fn_name            = "fragMain",
             .enabled_dynamic_states  = vk_enabledDynamicState,
@@ -350,4 +351,5 @@ void Renderer::init_texture() {
     m_texture.init_view(img_raw_data.vk_format, m_vkDevice);
     m_texture.init_sampler(m_vkDevice, m_vkPhysicalDevice);
 }
+
 

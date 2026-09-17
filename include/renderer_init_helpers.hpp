@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include "range/v3/view/enumerate.hpp"
+#include "renderer_types.hpp"
 inline bool supports_extension(std::span<vk::ExtensionProperties const> haystack, std::string_view needle) {
     return std::ranges::any_of(
         haystack, 
@@ -109,3 +110,10 @@ constexpr inline auto enabled_physical_device_features(){
         },
     };
 }
+
+namespace detail{
+auto perform_extra_pipeline_check(PipelineCreateInfo const& info) -> void;
+auto make_shader_stages(PipelineCreateInfo const& info) -> std::array<vk::PipelineShaderStageCreateInfo,2>;
+auto get_raster_state(PipelineCreateInfo const& info) -> vk::PipelineRasterizationStateCreateInfo;
+auto make_depth_stencil_state (PipelineCreateInfo const& info) -> vk::PipelineDepthStencilStateCreateInfo;
+}// namespace detail

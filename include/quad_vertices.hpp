@@ -22,18 +22,11 @@ struct QuadVertices{
         ,m_top_right(top_right)
         ,m_top_left (top_left)
     {}
-
-    template<typename Range> requires std::ranges::input_range<Range>
-    QuadVertices(Range input_range) {
-        if constexpr (std::ranges::sized_range<Range>) {
-            if (std::ranges::size(input_range) != 4) {
-                throw std::invalid_argument("Range must contain exactly 4 elements.");
-            }
-        }
-        std::ranges::copy(input_range,m_all);
+    QuadVertices(std::span<const V,4> span) {
+        std::ranges::copy(span,m_all);
     }
 
-    constexpr auto operator[](std::size_t idx) -> decltype(auto){return m_all[idx];}
-    constexpr auto span() -> auto{ return std::span(m_all); }
+    constexpr auto operator[](this auto& self, std::size_t idx) -> decltype(auto){return self.m_all[idx];}
+    constexpr auto span(this auto& self) -> decltype(auto) { return std::span(self.m_all); }
     static constexpr auto size() -> std::size_t{ return 4; }
 };

@@ -156,36 +156,103 @@ if(MC_ENABLE_UBSAN)
     target_link_options(vulkan_test0 PRIVATE -fsanitize=undefined -fno-omit-frame-pointer -g)
 endif()
 
+
+
+## =-=-= SLANG BUILDING =-=-=
+
 set(SLANGC_EXECUTABLE
     "/usr/local/bin/slangc"
 )
-set(SHADER_SLANG_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/main.slang"
+set(SHADERS_OUT_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/bin"
 )
-# helper targets
+set (SPIRV_PROFILE
+    spirv_1_4 
+)
 function (add_slang_shader_target TARGET)
-    cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
-    set (SHADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/shaders)
-    set (ENTRY_POINTS
-        -entry vertMain -entry fragMain -entry vertWireframe -entry fragWireframe
+    cmake_parse_arguments (
+        PARSE_ARGV 1
+        SHADER          # prefix 
+        ""              # options
+        SOURCE          # single-value argument
+        ENTRY_POINTS    # multi-value arguments
+    )
+    # Creates:
+    # SHADER_SOURCE = '.../shaders/...'
+    # SHADER_ENTRY_POINTS = entryPoint1;entryPoint2;entryPoint3...
+
+    set(OUTPUT_FILE         "${SHADERS_OUT_DIR}/${TARGET}.spv")
+
+    set(ENTRY_ARGS)
+    foreach(ENTRY_POINT IN LISTS SHADER_ENTRY_POINTS)
+        # Creates -entry;entryPoint1;-entry;entryPoint2;-entry;entryPoint3...
+            list(APPEND ENTRY_ARGS -entry ${ENTRY_POINT})
+    endforeach()
+
+    # Add all the headers, st. changes in the header files cause recompilation of the shaders
+    file(
+        GLOB 
+        SLANG_HEADERS 
+        CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.slangh"
     )
     add_custom_command (
-          OUTPUT ${SHADERS_DIR}
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-  )
-    add_custom_command (
-          OUTPUT  ${SHADERS_DIR}/slang.spv
-          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
-          WORKING_DIRECTORY ${SHADERS_DIR}
-          DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
-          COMMENT "Compiling Slang Shaders"
-          VERBATIM
-  )
-    add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
+        OUTPUT  
+            ${OUTPUT_FILE}
+
+        #1: ensure the output directory exists
+        COMMAND 
+            ${CMAKE_COMMAND} -E make_directory "${SHADERS_OUT_DIR}"
+
+        #2: Compile the shader to .spv
+        COMMAND 
+            ${SLANGC_EXECUTABLE} 
+            ${SHADER_SOURCE} 
+            -target spirv 
+            -profile ${SPIRV_PROFILE}
+            -emit-spirv-directly 
+            -fvk-use-entrypoint-name ${ENTRY_ARGS} 
+            -o ${OUTPUT_FILE}
+
+        DEPENDS 
+            ${SHADER_SOURCE}
+            ${SLANG_HEADERS}
+
+        COMMENT "Compiling Slang Shader ${TARGET} -> (${OUTPUT_FILE})"
+        VERBATIM
+    )
+    add_custom_target(${TARGET} DEPENDS ${OUTPUT_FILE})
 endfunction()
 
-add_slang_shader_target(shaders SOURCES ${SHADER_SLANG_SOURCES})
-add_dependencies(vulkan_test0 shaders)
+add_slang_shader_target(
+    main_shaders
+
+    SOURCE
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/main_shaders.slang"
+
+    ENTRY_POINTS
+        vertMain 
+        fragMain 
+        vertWireframe 
+        fragWireframe
+)
+
+add_slang_shader_target(
+    shaders2d
+
+    SOURCE
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shaders2d.slang"
+
+    ENTRY_POINTS
+        vertMain 
+        fragMain 
+)
+
+
+add_dependencies(vulkan_test0 
+    main_shaders
+    shaders2d
+)
 
 add_custom_target(run
     COMMAND sh -c "./bin/vulkan_test0"

@@ -6,6 +6,7 @@ struct UBO{
     mat4 view;
     mat4 proj;
 };
+ConstantBuffer<UBO> ubo;
 
 struct VSInput{
     vec3 pos;
@@ -18,7 +19,6 @@ struct VSOutput{
     vec3 fragColor;
     vec2 fragTxCoord;
 };
-ConstantBuffer<UBO> ubo;
 
 Sampler2D texture;
 [shader("vertex")]

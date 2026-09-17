@@ -3,7 +3,7 @@
 #include "vk_types.hpp"
 
 auto Renderer::upload_mesh2d() -> void {
-    m_rend2d.m_gpu_mesh = make_gpu_mesh(m_rend2d.make_cpu_mesh());
+    m_rend2d.m_gpu_mesh = make_gpu_mesh(m_rend2d.m_cpu_mesh);
 }
 auto Renderer::upload_mesh3d(
     MeshID id,

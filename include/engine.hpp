@@ -40,7 +40,7 @@ struct Engine{
 
         auto model = glm::mat4x4(1.0f);
         model = glm::translate(model,heightmap.m_world_center);
-        rend.upload_mesh(mesh_id, cpu_mesh, model);
+        rend.upload_mesh3d(mesh_id, cpu_mesh, model);
     }
 
  private:

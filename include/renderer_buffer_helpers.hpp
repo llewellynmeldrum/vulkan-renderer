@@ -1,7 +1,9 @@
 #pragma once 
+#include "file_io.hpp"
 #include "vk_managed_buffers.hpp"
 #include "vk_types.hpp"
 #include "vulkan/vulkan.hpp"
+#include <vulkan/vulkan_raii.hpp>
 namespace detail::helpers{
 [[nodiscard]] inline auto select_memory_type(
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
@@ -91,18 +93,27 @@ make_uniform_buffer(
     );
 
 }
-[[nodiscard]] inline auto 
-make_shader_module(
+struct ShaderModuleWrapper{
+    vk::raii::ShaderModule module;
+    std::string_view spirv_source_name;
+    std::string_view module_name;
+};
+[[nodiscard]] inline auto make_shader_module(
     vk::raii::Device const& m_vkDevice,
-    std::span<const char> spirv_src
-){
-    ASSERT(spirv_src.size() == spirv_src.size_bytes());
-    return vk::raii::ShaderModule{
-        m_vkDevice,
-        vk::ShaderModuleCreateInfo{
-            .codeSize = spirv_src.size(),
-            .pCode = reinterpret_cast<u32 const*>(spirv_src.data()),
-        },
+    std::string_view spirv_filename,
+    std::string_view  module_name
+)-> ShaderModuleWrapper{
+    auto spirv_src = read_file_contents(spirv_filename);
+    return ShaderModuleWrapper{
+            vk::raii::ShaderModule{
+                m_vkDevice,
+                vk::ShaderModuleCreateInfo{
+                    .codeSize = spirv_src.size(),
+                    .pCode = reinterpret_cast<u32 const*>(spirv_src.data()),
+                }
+            },
+            spirv_filename,
+            module_name,
     };
 }
 [[nodiscard]] inline auto no_blend() -> vk::PipelineColorBlendAttachmentState

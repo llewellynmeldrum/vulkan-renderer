@@ -62,7 +62,7 @@ auto Renderer::get_viewport() const
 -> vk::Viewport{
     return {
         m_viewportOffset.x, m_viewportOffset.y,
-        m_windowPixelExtent.x, m_windowPixelExtent.x,
+        m_windowPixelExtent.x, m_windowPixelExtent.y,
         k_depthMin, k_depthMax
     };
 }

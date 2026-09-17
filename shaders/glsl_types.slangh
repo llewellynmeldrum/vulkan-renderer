@@ -4,4 +4,18 @@ typealias vec2 = vector<float,2>;
 typealias vec3 = vector<float,3>;
 typealias vec4 = vector<float,4>;
 typealias mat4 = matrix<float,4,4>;
+
+typealias u8  = uint8_t;
+typealias u16 = uint16_t;
+typealias u32 = uint32_t;
+typealias u64 = uint64_t;
+
+typealias i8  =   int8_t;
+typealias i16 =  int16_t;
+typealias i32 =  int32_t;
+typealias i64 =  int64_t;
+
+typealias f16 = float16_t;
+typealias f32 = float32_t;
+typealias f64 = float64_t;
 #endif // GLSL_TYPES_H

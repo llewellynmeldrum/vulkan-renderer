@@ -2,6 +2,7 @@
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_oldnames.h"
+#include "color_utils.hpp"
 #include "magic_enum.hpp"
 #include <print>
 auto Engine::init()
@@ -14,6 +15,14 @@ auto Engine::init()
     rend.init(platform.get_window_handle(),initialWindowLogicalExtent);
     world.init();
     upload_heightmap(world.m_heightmap);
+    rend.m_rend2d.set_draw_state(
+        DrawState{
+            .fill_color = make_rgba(0,255,0,255)
+        }
+    );
+    // screen center should be top left, with length of 200 lpx (logical pixels)
+    rend.m_rend2d.add_rect(rend.m_windowLogicalExtent /2.0f , glm::vec2(200.0f));
+    rend.upload_mesh2d();
 }
 
 void Engine::cleanup(){
