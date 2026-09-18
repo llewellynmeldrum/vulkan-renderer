@@ -14,14 +14,14 @@ auto upload_model_matrix(
     void* ubo_mapped_memory,
     glm::mat4x4 model
 ) -> void {
-    auto dst_offset = offsetof(UniformBufferObject, model);
+    auto dst_offset = offsetof(UBO, model);
     void* src = &model;
     void* dst = reinterpret_cast<std::byte*>(ubo_mapped_memory)+ dst_offset;
-    memcpy(dst, src, sizeof(UniformBufferObject::model));
+    memcpy(dst, src, sizeof(UBO::model));
 }
 auto upload_ubo(
     void* ubo_mapped_memory,
-    UniformBufferObject ubo
+    UBO ubo
 ) -> void {
     // HACK: glm uses y up for clip space, vulkan uses y down. flip here
     ubo.proj[1][1] *= -1; 
@@ -34,7 +34,7 @@ auto Renderer::update_ubo(
     glm::mat4x4 model_matrix
 ) -> void {
     auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
-    auto ubo = UniformBufferObject{
+    auto ubo = UBO{
         .model = model_matrix,
         .view = cam.get_view_matrix(),
         .proj = cam.get_proj_matrix(aspect),
@@ -268,7 +268,7 @@ void Renderer::draw(Camera const& cam) {
     m_vkDevice.resetFences(*frame.fence);
 
 
-    update_ubo(frame,cam,glm::mat4(1.0f));
+    update_ubo(frame, cam,glm::mat4(1.0f));
     record_commands(cam,frame,imageIndex);
     submit_commands(m_vkQueue, frame, *m_swapchain.renderFinishedSemaphores[imageIndex]);
 

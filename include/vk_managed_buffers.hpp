@@ -3,12 +3,8 @@
 #include "glm/ext/matrix_float4x4.hpp"
 #include "vk_types.hpp"
 #include <vulkan/vulkan_raii.hpp>
+#include "cpp_slang_shared.hpp"
 
-struct UniformBufferObject{
-    alignas(16) glm::mat4x4 model;
-    alignas(16) glm::mat4x4 view;
-    alignas(16) glm::mat4x4 proj;
-};
 
 struct AllocatedImage{
     AllocatedImage(nullptr_t) {}

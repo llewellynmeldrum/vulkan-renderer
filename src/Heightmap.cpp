@@ -56,7 +56,7 @@ CpuMesh3D mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo mes
                 auto const y = heightmap.sample_height(x,z);
                 out_vertices[i].pos = {x,y,z};
                 out_vertices[i].color = color_from_y(y);
-                out_vertices[i].texCoord = vtx_raw_data::ccw_quad_verts[i].texCoord;
+                out_vertices[i].uv_pos = vtx_raw_data::ccw_quad_verts[i].uv_pos;
             }
             mesh.add_quad(out_vertices);
         }
@@ -82,7 +82,7 @@ CpuMesh3D mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo mes
         auto const y = -heightmap.m_boundsY.range()/2.0f;
         out_vertices[i].pos = {x,y,z};
         out_vertices[i].color = make_rgb(255,255,255);
-        out_vertices[i].texCoord = vtx_raw_data::ccw_quad_verts[i].texCoord;
+        out_vertices[i].uv_pos = vtx_raw_data::ccw_quad_verts[i].uv_pos;
     }
     mesh.add_quad(out_vertices);
     return mesh;

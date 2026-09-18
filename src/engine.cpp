@@ -15,13 +15,15 @@ auto Engine::init()
     rend.init(platform.get_window_handle(),initialWindowLogicalExtent);
     world.init();
     upload_heightmap(world.m_heightmap);
-    rend.m_rend2d.set_draw_state(
-        DrawState{
-            .fill_color = make_rgba(0,255,0,255)
-        }
-    );
+    rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(0,255,0,255) });
     // screen center should be top left, with length of 200 lpx (logical pixels)
-    rend.m_rend2d.add_rect(rend.m_windowLogicalExtent /2.0f , glm::vec2(200.0f));
+    auto const mid = rend.m_windowLogicalExtent /2.0f ;
+//    rend.m_rend2d.add_rect(mid + glm::vec2{-200,-200}, glm::vec2(400.0f));
+
+    rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(255,128,0,255) });
+    static constexpr size_t circle_count = 2;
+
+    rend.m_rend2d.add_circle(mid, 200.0f);
     rend.upload_mesh2d();
 }
 

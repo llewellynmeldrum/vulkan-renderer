@@ -1,17 +1,16 @@
 #include "glsl_types.slangh"
 #include "color_helpers.slangh"
+#include "../include/cpp_slang_shared.hpp"
 
-struct UBO{
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-};
+// per draw, the model switches -> should probably be a push constant? 
+// Per frame, the view and proj switches -> Could maybe be a UBO?
+
 ConstantBuffer<UBO> ubo;
 
 struct VSInput{
     vec3 pos;
     vec3 color;
-    vec2 texCoord;
+    vec2 uv_pos;
 };
 
 struct VSOutput{
@@ -24,17 +23,9 @@ Sampler2D texture;
 [shader("vertex")]
 VSOutput vertMain(VSInput in){
     VSOutput output;
-    output.sv_position = 
-    mul(ubo.proj,
-        mul(ubo.view,
-            mul(ubo.model,
-                vec4(in.pos,1.0)
-            )
-        )
-    )
-    ;
+    output.sv_position = mul(ubo.proj, mul(ubo.view, mul(ubo.model, vec4(in.pos,1.0))));
     output.fragColor = in.color;
-    output.fragTxCoord = in.texCoord;
+    output.fragTxCoord = in.uv_pos;
     return output;
 }
 

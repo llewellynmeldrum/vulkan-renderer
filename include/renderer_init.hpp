@@ -381,7 +381,7 @@ make_inflight_frames(
         frame_idx++;
 
         // Create the uniform buffers for each frame, based on the size of the UniformBufferObject struct
-        static constexpr auto ubo_size_bytes = static_cast<u32>(sizeof(UniformBufferObject));
+        static constexpr auto ubo_size_bytes = static_cast<u32>(sizeof(UBO));
         std::tie(
             frame.uniformBuffer,
             frame.uniformBufferMemory 
@@ -474,7 +474,7 @@ make_descriptor_sets(
             vk::DescriptorBufferInfo{}
                 .setBuffer(*m_inflightFrames[frame_idx].uniformBuffer)
                 .setOffset(0)
-                .setRange(sizeof(UniformBufferObject))
+                .setRange(sizeof(UBO))
          ;
         auto imageInfo = 
             vk::DescriptorImageInfo{}

@@ -4,6 +4,7 @@
 #include <ranges>
 #include <span>
 
+#include "cpp_slang_shared.hpp"
 #include "cppslop.hpp"
 #include "cpu_mesh.hpp"
 #include "gpu_mesh.hpp"
@@ -54,8 +55,17 @@ public: // SECTION: PUBLIC MEMBERS =============================================
 
 private: // SECTION: PRIVATE FUNCTIONS ================================================================================
 
+//    struct BitMask{
+//        u32 offset;
+//        bool check(u32 v) {
+//            return (bool)((v >> offset) & 1);
+//        }
+//    };
+
+    static constexpr BitMask shapeID_Quad = BitMask(0);
+    static constexpr BitMask shapeID_Circle = BitMask(1);
     // wrapper for m_cpu_mesh.add_quad();
-    auto add_quad(QuadVertexPositions2D positions) -> void;
+    auto add_quad(QuadVertexPositions2D positions, BitMask shapeID) -> void;
 
 
 private: // SECTION: PRIVATE MEMBERS ========================================================================
