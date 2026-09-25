@@ -2,10 +2,14 @@
 #include "color_helpers.slangh"
 #include "../include/cpp_slang_shared.hpp"
 
-// per draw, the model switches -> should probably be a push constant? 
-// Per frame, the view and proj switches -> Could maybe be a UBO?
 
 ConstantBuffer<UBO> ubo;
+Sampler2D tim_cheese;
+Sampler2D _; //unused
+
+[vk::push_constant]
+PushConstants::ModelMatrix pc;
+
 
 struct VSInput{
     vec3 pos;
@@ -19,11 +23,13 @@ struct VSOutput{
     vec2 fragTxCoord;
 };
 
-Sampler2D texture;
 [shader("vertex")]
 VSOutput vertMain(VSInput in){
     VSOutput output;
-    output.sv_position = mul(ubo.proj, mul(ubo.view, mul(ubo.model, vec4(in.pos,1.0))));
+    let world_space = mul(pc.model, vec4(in.pos,1.0));
+    let view_space = mul(ubo.view, world_space);
+    output.sv_position = mul(ubo.proj,view_space);
+//    output.sv_position = mul(ubo.proj, mul(ubo.view, mul(model, vec4(in.pos,1.0))));
     output.fragColor = in.color;
     output.fragTxCoord = in.uv_pos;
     return output;

@@ -4,6 +4,7 @@
 
 #include "glm_types.hpp"
 #include "vk_types.hpp"
+#include "cpp_slang_shared.hpp"
 
 struct Vertex3D{
     glm::vec3 pos;

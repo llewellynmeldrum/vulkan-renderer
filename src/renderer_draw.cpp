@@ -10,32 +10,21 @@
 #include "vk_types.hpp"
 #include "vk_util.hpp"
 
-auto upload_model_matrix(
-    void* ubo_mapped_memory,
-    glm::mat4x4 model
-) -> void {
-    auto dst_offset = offsetof(UBO, model);
-    void* src = &model;
-    void* dst = reinterpret_cast<std::byte*>(ubo_mapped_memory)+ dst_offset;
-    memcpy(dst, src, sizeof(UBO::model));
-}
 auto upload_ubo(
     void* ubo_mapped_memory,
     UBO ubo
 ) -> void {
     // HACK: glm uses y up for clip space, vulkan uses y down. flip here
     ubo.proj[1][1] *= -1; 
-    memcpy(ubo_mapped_memory, &ubo, sizeof(ubo));
+    memcpy(ubo_mapped_memory, &ubo, sizeof(UBO));
 }
 
 auto Renderer::update_ubo(
     FrameData const& frame,
-    Camera const& cam,
-    glm::mat4x4 model_matrix
+    Camera const& cam
 ) -> void {
     auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
     auto ubo = UBO{
-        .model = model_matrix,
         .view = cam.get_view_matrix(),
         .proj = cam.get_proj_matrix(aspect),
     };
@@ -174,11 +163,14 @@ auto Renderer::record_commands(
     for (const auto& [id, gpu_mesh]: m_gpu_meshes3d){
         LOG_DBG("Drawing mesh id={}, vtx:{},idx:{}",id,gpu_mesh.m_vertex_count, gpu_mesh.m_index_count);
         auto model_matrix = m_model_matrices.at(id);
-        upload_model_matrix(frame.uniformBufferMappedMemory, model_matrix);
+        // TODO: use push constants here
+//        upload_model_matrix(frame.uniformBufferMappedMemory, model_matrix);
 
+        m_fill_pipeline.push(cmdBuf,PushConstants::ModelMatrix{model_matrix});
         m_fill_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
         draw_mesh(cmdBuf, gpu_mesh);
 
+        m_line_pipeline.push(cmdBuf,PushConstants::ModelMatrix{model_matrix});
         m_line_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
         draw_mesh(cmdBuf, gpu_mesh);
 
@@ -268,7 +260,7 @@ void Renderer::draw(Camera const& cam) {
     m_vkDevice.resetFences(*frame.fence);
 
 
-    update_ubo(frame, cam,glm::mat4(1.0f));
+    update_ubo(frame, cam);
     record_commands(cam,frame,imageIndex);
     submit_commands(m_vkQueue, frame, *m_swapchain.renderFinishedSemaphores[imageIndex]);
 

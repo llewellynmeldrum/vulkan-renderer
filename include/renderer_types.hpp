@@ -92,7 +92,7 @@ struct PipelineCreateInfo{
     std::string vertex_fn_name;
     std::string frag_fn_name;
     std::span<const vk::DynamicState> enabled_dynamic_states;
-    vk::raii::DescriptorSetLayout const& m_vkDescriptorSetLayout; 
+    vk::raii::DescriptorSetLayout const& descriptor_set_layout; 
     // TODO: make this optional type or something
     // for pipelines which dont use a UBO at all 
 

@@ -14,6 +14,9 @@ auto Engine::init()
     input.init(platform.get_window_handle(), initialWindowLogicalExtent);
     rend.init(platform.get_window_handle(),initialWindowLogicalExtent);
     world.init();
+
+
+
     upload_heightmap(world.m_heightmap);
     rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(0,255,0,255) });
     // screen center should be top left, with length of 200 lpx (logical pixels)
@@ -21,9 +24,14 @@ auto Engine::init()
 //    rend.m_rend2d.add_rect(mid + glm::vec2{-200,-200}, glm::vec2(400.0f));
 
     rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(255,128,0,255) });
-    static constexpr size_t circle_count = 2;
+//    static constexpr size_t circle_count = 2;
 
     rend.m_rend2d.add_circle(mid, 200.0f);
+    rend.m_rend2d.set_draw_state( { 
+        .fill_color = make_rgba(255,200,255,255),
+        .font_height = 128.0f,
+    });
+    rend.m_rend2d.add_text("Hello World", mid);
     rend.upload_mesh2d();
 }
 

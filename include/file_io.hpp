@@ -1,5 +1,6 @@
 #pragma once 
 #include <fstream>
+#include <span>
 
 #include "logger.hpp"
 #include "types.hpp"

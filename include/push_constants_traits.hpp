@@ -27,5 +27,12 @@ struct Traits<Transform2D>{
         DECL_PC_RANGE(Transform2D, vk::ShaderStageFlagBits::eVertex)
     };
 };
+
+template<>
+struct Traits<ModelMatrix>{
+    static constexpr auto ranges = std::array{
+        DECL_PC_RANGE(ModelMatrix, vk::ShaderStageFlagBits::eVertex)
+    };
+};
 #undef DECL_PC_RANGE
 } // namespace PushConstants

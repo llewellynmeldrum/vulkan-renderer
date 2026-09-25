@@ -416,6 +416,12 @@ make_descriptor_set_layout(
                 .setDescriptorCount(1)
                 .setStageFlags(vk::ShaderStageFlagBits::eFragment)
         },
+        vk::DescriptorSetLayoutBinding{
+            vk::DescriptorSetLayoutBinding{}
+                .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+                .setDescriptorCount(1)
+                .setStageFlags(vk::ShaderStageFlagBits::eFragment)
+        },
     };
     for (i32 i = 0; i<layoutBindings.size(); i++){
         layoutBindings[i].setBinding(i);
@@ -441,6 +447,9 @@ make_descriptor_pool(
         vk::DescriptorPoolSize{}
             .setType(vk::DescriptorType::eCombinedImageSampler)
             .setDescriptorCount(syncFrameCount),
+        vk::DescriptorPoolSize{}
+            .setType(vk::DescriptorType::eCombinedImageSampler)
+            .setDescriptorCount(syncFrameCount),
     };
     return vk::raii::DescriptorPool{
         m_vkDevice,
@@ -457,7 +466,8 @@ make_descriptor_sets(
     vk::raii::DescriptorPool const& m_vkDescriptorPool,
     vk::raii::DescriptorSetLayout const& m_vkDescriptorSetLayout,
     std::span<const FrameData> m_inflightFrames,
-    Texture2D const& texture,
+    Texture2D const& tex_0,
+    Texture2D const& tex_1,
     u32 syncFrameCount
 ) -> std::vector<vk::raii::DescriptorSet>
 {
@@ -476,12 +486,6 @@ make_descriptor_sets(
                 .setOffset(0)
                 .setRange(sizeof(UBO))
          ;
-        auto imageInfo = 
-            vk::DescriptorImageInfo{}
-            .setSampler(texture.sampler)
-            .setImageView(texture.image_view)
-            .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-         ;
         auto descriptorWriteSets = std::array{
             vk::WriteDescriptorSet{}
                 .setDstSet(*res[frame_idx])
@@ -490,12 +494,9 @@ make_descriptor_sets(
                 .setDescriptorType(vk::DescriptorType::eUniformBuffer)
                 .setBufferInfo(bufferInfo)
             ,
-            vk::WriteDescriptorSet{}
-                .setDstSet(*res[frame_idx])
-                .setDstArrayElement(0)
-                .setDescriptorCount(1)
-                .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-                .setImageInfo(imageInfo)
+            tex_0.get_write_descriptor_set( *res[frame_idx]),
+            tex_1.get_write_descriptor_set( *res[frame_idx])
+
         };
         for (i32 i = 0; i<descriptorWriteSets.size(); i++){
             descriptorWriteSets[i].setDstBinding(i);

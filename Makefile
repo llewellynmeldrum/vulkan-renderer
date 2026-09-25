@@ -39,13 +39,13 @@ configure: OPT_LEVEL=2
 configure:
 	cmake -S . -B $(BUILD_DIR) $(CMAKE_COMMON) \
 		-DENABLE_CPPTRACE=ON\
-		-DMC_O2=ON \
+		-D_O2=ON \
 		-DCMAKE_BUILD_TYPE=Debug 
 
 configure-debug:
 	cmake -S . -B $(BUILD_DIR) $(CMAKE_COMMON) \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DMC_O0=ON
+		-D_O0=ON
 
 build: OPT_LEVEL=2
 build: configure
@@ -68,7 +68,7 @@ cfast:
 	cmake -S . -B $(BUILD_CFAST) $(CMAKE_COMMON) \
 		-DCMAKE_BUILD_TYPE=Debug\
 		-DENABLE_CPPTRACE=OFF\
-		-DMC_O2=ON
+		-D_O2=ON
 
 	cmake --build $(BUILD_CFAST) $(BUILD_FLAGS) --target run
 
@@ -76,7 +76,7 @@ fast:
 	cmake -S . -B $(BUILD_FAST) $(CMAKE_COMMON) \
 		-DENABLE_CPPTRACE=OFF\
 		-DCMAKE_BUILD_TYPE=Relase\
-		-DMC_O3=ON
+		-D_O3=ON
 
 	cmake --build $(BUILD_FAST) $(BUILD_FLAGS)
 
@@ -90,7 +90,7 @@ run-fast: fast
 asan:
 	cmake -S . -B $(BUILD_ASAN) $(CMAKE_COMMON) \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DMC_ENABLE_ASAN=ON
+		-D_ENABLE_ASAN=ON
 	cmake --build $(BUILD_ASAN) $(BUILD_FLAGS)
 
 
@@ -98,7 +98,7 @@ asan:
 tsan:
 	cmake -S . -B $(BUILD_TSAN) $(CMAKE_COMMON) \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DMC_ENABLE_TSAN=ON
+		-D_ENABLE_TSAN=ON
 	cmake --build $(BUILD_TSAN) $(BUILD_FLAGS)
 
 run-tsan: tsan
@@ -107,8 +107,8 @@ run-tsan: tsan
 ausan:
 	cmake -S . -B $(BUILD_AUSAN) $(CMAKE_COMMON) \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DMC_ENABLE_ASAN=ON \
-		-DMC_ENABLE_UBSAN=ON
+		-D_ENABLE_ASAN=ON \
+		-D_ENABLE_UBSAN=ON
 	cmake --build $(BUILD_AUSAN) $(BUILD_FLAGS)
 
 run-asan: asan

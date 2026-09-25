@@ -3,10 +3,13 @@
 #include <stack>
 #include <ranges>
 #include <span>
+#include <vector>
+#include <tuple>
 
 #include "cpp_slang_shared.hpp"
 #include "cppslop.hpp"
 #include "cpu_mesh.hpp"
+#include "font_atlas.hpp"
 #include "gpu_mesh.hpp"
 #include "types.hpp"
 #include "vk_types.hpp"
@@ -26,15 +29,18 @@ public: // SECTION: TYPES/TYPEDEFS =============================================
     using Vertex = Vertex2D;
     using QuadVertices2D = QuadVertices<Renderer2D::Vertex>;
     using QuadVertexPositions2D = QuadVertices<glm::vec2>;
+    using QuadUvPositions2D = QuadVertices<glm::vec2>;
 
 
 public: // SECTION: PUBLIC FUNCTIONS ==================================================================================
     
+    auto init(
+    ) -> void; 
     auto clear() -> void;
     auto add_rect(glm::vec2 wTopLeft, glm::vec2 wExtents) -> void;
     auto add_square(glm::vec2 wTopLeft, f32 wExtent) -> void;
     auto add_circle( glm::vec2 wCentre, f32 wRadius) -> void;
-    auto add_text( glm::vec2 wTopLeft, glm::vec2 wExtents) -> void;
+    auto add_text(std::string_view msg, glm::vec2 wTopLeft) -> void;
 
     auto get_draw_state(this auto& self) -> decltype(auto);
     auto set_draw_state(DrawState const& v) -> void ;
@@ -52,6 +58,8 @@ public: // SECTION: PUBLIC MEMBERS =============================================
 
     std::size_t m_quad_count{0};
 
+    // returns true iff. remainder is zero for a and b's rounded integral components
+    FontAtlas font_atlas;
 
 private: // SECTION: PRIVATE FUNCTIONS ================================================================================
 
@@ -66,6 +74,11 @@ private: // SECTION: PRIVATE FUNCTIONS =========================================
     static constexpr BitMask shapeID_Circle = BitMask(1);
     // wrapper for m_cpu_mesh.add_quad();
     auto add_quad(QuadVertexPositions2D positions, BitMask shapeID) -> void;
+    auto add_quad(QuadVertexPositions2D positions, QuadUvPositions2D uv_positions, BitMask shapeID) -> void;
+    auto add_glyph_quad(
+        FontAtlas::AlignedQuad const& aligned_quad,
+        FontAtlas::SizeSelection const& size_selection
+    ) -> void;
 
 
 private: // SECTION: PRIVATE MEMBERS ========================================================================

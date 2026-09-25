@@ -39,103 +39,111 @@ void Renderer::init(SDL_Window* window, glm::uvec2 window_extent) {
     m_windowLogicalExtent = {window_extent.x,window_extent.y};
     m_windowPixelExtent = logical_to_pixel(m_windowLogicalExtent);
     LOG_INFO("INITIALIZING RENDERER ({})", static_cast<void*>(this));
-    init_vulkan();
+
+    try{
+        init_vulkan();
+    }catch(vk::SystemError const& e){
+        LOG_FATAL("Failed to initialize vulkan: {}", e.what());
+    }
 }
 
 
 void Renderer::init_vulkan() {
     //clang-format off
-    try{
-        {
-            auto ctx = detail::make_vk_instance(k_useValidationLayers, m_vkContext, k_API_VER);
-            m_vkInstance = std::move(ctx.m_vkInstance);
-            m_vkDebugMessenger = std::move(ctx.m_vkDebugMessenger);
-        }
+    {
+        auto ctx = detail::make_vk_instance(k_useValidationLayers, m_vkContext, k_API_VER);
+        m_vkInstance = std::move(ctx.m_vkInstance);
+        m_vkDebugMessenger = std::move(ctx.m_vkDebugMessenger);
+    }
 
-        {
-            m_vkSurface = detail::make_vk_surface(m_vkInstance, m_window);
-        }
+    {
+        m_vkSurface = detail::make_vk_surface(m_vkInstance, m_window);
+    }
 
-        {
-            auto ctx = detail::make_vk_device_and_queue(m_vkInstance,m_vkSurface, k_API_VER);
-            m_vkPhysicalDevice = std::move(ctx.m_vkPhysicalDevice);
-            m_vkDevice         = std::move(ctx.m_vkDevice);
-            m_vkQueue          = std::move(ctx.m_vkQueue);
-            m_vkQueueFamily    = std::move(ctx.m_vkQueueFamily);
-        }
+    {
+        auto ctx = detail::make_vk_device_and_queue(m_vkInstance,m_vkSurface, k_API_VER);
+        m_vkPhysicalDevice = std::move(ctx.m_vkPhysicalDevice);
+        m_vkDevice         = std::move(ctx.m_vkDevice);
+        m_vkQueue          = std::move(ctx.m_vkQueue);
+        m_vkQueueFamily    = std::move(ctx.m_vkQueueFamily);
+    }
 
-        {
-            m_allocator = detail::make_vma_allocator(m_vkPhysicalDevice, m_vkDevice, m_vkInstance);
-        }
+    {
+        m_allocator = detail::make_vma_allocator(m_vkPhysicalDevice, m_vkDevice, m_vkInstance);
+    }
 
-        {
-            auto swap_settings = SwapchainSettings{
-                .physical_device = m_vkPhysicalDevice,
-                .device = m_vkDevice,
-                .surface = m_vkSurface,
-                .extent_px = get_framebuffer_size(),
-            };
-            m_swapchain = detail::make_swapchain(swap_settings);
-        }
+    {
+        auto swap_settings = SwapchainSettings{
+            .physical_device = m_vkPhysicalDevice,
+            .device = m_vkDevice,
+            .surface = m_vkSurface,
+            .extent_px = get_framebuffer_size(),
+        };
+        m_swapchain = detail::make_swapchain(swap_settings);
+    }
 
-        {
-            m_inflightFrames = detail::make_inflight_frames(
-                m_vkDevice,
-                m_vkPhysicalDevice,
-                k_syncFrameCount,
-                m_vkQueueFamily
-            );
-        }
+    {
+        m_inflightFrames = detail::make_inflight_frames(
+            m_vkDevice,
+            m_vkPhysicalDevice,
+            k_syncFrameCount,
+            m_vkQueueFamily
+        );
+    }
 
-        {
-            init_texture(); 
-        }
+    {
+        init_texture(); 
+    }
+    {
+        m_rend2d.init();
+        m_rend2d.font_atlas = make_font_atlas(
+            "./fonts/basis33/basis33.ttf"
+        );
+    }
 
-        {
-            m_depthImage = DepthAttachment::make(
-                m_vkDevice,
-                m_allocator,
-                m_swapchain.extent
-            );
-        }
+    {
+        m_depthImage = DepthAttachment::make(
+            m_vkDevice,
+            m_allocator,
+            m_swapchain.extent
+        );
+    }
 
-        {
-            m_vkDescriptorSetLayout = detail::make_descriptor_set_layout(m_vkDevice);
-            m_vkDescriptorPool = detail::make_descriptor_pool(m_vkDevice, k_syncFrameCount);
-            m_vkDescriptorSets = detail::make_descriptor_sets(
-                m_vkDevice,
-                m_vkDescriptorPool,
-                m_vkDescriptorSetLayout,
-                m_inflightFrames,
-                m_texture,
-                k_syncFrameCount
-            );
-        }
+    {
+        m_vkDescriptorSetLayout = detail::make_descriptor_set_layout(m_vkDevice);
+        m_vkDescriptorPool = detail::make_descriptor_pool(m_vkDevice, k_syncFrameCount);
+        m_vkDescriptorSets = detail::make_descriptor_sets(
+            m_vkDevice,
+            m_vkDescriptorPool,
+            m_vkDescriptorSetLayout,
+            m_inflightFrames,
+            m_texture,
+            m_rend2d.font_atlas.atlas_texture,
+            k_syncFrameCount
+        );
+    }
 
 
-        {
-            auto main_shaders_module = detail::helpers::make_shader_module(
-                m_vkDevice, 
-                "./shaders/bin/main_shaders.spv",
-                "main_shaders"
-            );
+    {
+        auto main_shaders_module = detail::helpers::make_shader_module(
+            m_vkDevice, 
+            "./shaders/bin/main_shaders.spv",
+            "main_shaders"
+        );
 
-            init_fill_pipeline(main_shaders_module);
-            init_line_pipeline(main_shaders_module);
+        init_fill_pipeline(main_shaders_module);
+        init_line_pipeline(main_shaders_module);
 
-            auto shaders2d_module = detail::helpers::make_shader_module(
-                m_vkDevice, 
-                "./shaders/bin/shaders2d.spv",
-                "shaders2d"
-            );
-            init_2d_pipeline(shaders2d_module);
-        }
+        auto shaders2d_module = detail::helpers::make_shader_module(
+            m_vkDevice, 
+            "./shaders/bin/shaders2d.spv",
+            "shaders2d"
+        );
+        init_2d_pipeline(shaders2d_module);
+    }
 
-        {
-            init_sync_structures();
-        }
-    }catch(vk::SystemError const& e){
-        LOG_FATAL("Failed to initialize vulkan: {}", e.what());
+    {
+        init_sync_structures();
     }
 }
 
@@ -195,7 +203,7 @@ auto make_shader_pipeline(PipelineCreateInfo info)
         info.device,
         vk::PipelineLayoutCreateInfo{}
             .setPushConstantRanges(push_constant_ranges)
-            .setSetLayouts(*info.m_vkDescriptorSetLayout)
+            .setSetLayouts(*info.descriptor_set_layout)
     };
 
     auto depthStencilState = detail::make_depth_stencil_state(info);
@@ -238,7 +246,7 @@ auto make_shader_pipeline(PipelineCreateInfo info)
     return pipeline;
 }
 void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
-    m_line_pipeline = make_shader_pipeline<Vertex3D>(
+    m_line_pipeline = make_shader_pipeline<Vertex3D, PushConstants::ModelMatrix>(
         PipelineCreateInfo {
             .pipeline_name           = "main_line",
             .shader_module_name      = shader.module_name,
@@ -247,7 +255,7 @@ void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& sh
             .vertex_fn_name          = "vertWireframe",
             .frag_fn_name            = "fragWireframe",
             .enabled_dynamic_states  = vk_enabledDynamicState,
-            .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
+            .descriptor_set_layout = m_vkDescriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eLine,
             .cull_mode               = vk::CullModeFlagBits::eNone,
             .color_image_format      = m_swapchain.imageFormat,
@@ -278,7 +286,7 @@ auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shad
             .vertex_fn_name          = "vertMain",
             .frag_fn_name            = "fragMain",
             .enabled_dynamic_states  = vk_enabledDynamicState,
-            .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
+            .descriptor_set_layout = m_vkDescriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eFill,
             .cull_mode               = vk::CullModeFlagBits::eNone,
             .color_image_format      = m_swapchain.imageFormat,
@@ -296,7 +304,7 @@ auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shad
 }
 
 void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
-    m_fill_pipeline = make_shader_pipeline<Vertex3D, PushConstants::None>(
+    m_fill_pipeline = make_shader_pipeline<Vertex3D, PushConstants::ModelMatrix>(
         PipelineCreateInfo{
             .pipeline_name           = "main_fill",
             .shader_module_name      = shader.module_name,
@@ -305,7 +313,7 @@ void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& sh
             .vertex_fn_name          = "vertMain",
             .frag_fn_name            = "fragMain",
             .enabled_dynamic_states  = vk_enabledDynamicState,
-            .m_vkDescriptorSetLayout = m_vkDescriptorSetLayout,
+            .descriptor_set_layout = m_vkDescriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eFill,
             .cull_mode               = vk::CullModeFlagBits::eNone,
             .color_image_format      = m_swapchain.imageFormat,
@@ -344,12 +352,8 @@ void Renderer::init_sync_structures() {
 
 
 void Renderer::init_texture() {
-    auto img_raw_data = ImageData::load_from_filename("./textures/tim_cheese.png");
-    auto cmdBuf = begin_single_use_cmd();
-    set_vk_dbg_name(m_vkDevice,cmdBuf, "Texture image transition layout buffer");
-    m_texture.upload_image(m_allocator, cmdBuf, img_raw_data);
-    m_texture.init_view(img_raw_data.vk_format, m_vkDevice);
-    m_texture.init_sampler(m_vkDevice, m_vkPhysicalDevice);
+    // all i need is to be able to supply texture2D's pctor with a function it can call
+    m_texture = make_texture_2d( "./textures/tim_cheese.png");
 }
 
 

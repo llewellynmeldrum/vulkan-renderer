@@ -8,10 +8,12 @@
 
 
 // NOTE: Includes
+// (BOTH)
+#include "common_utils.hpp"
 #if defined(__cplusplus)
     #include <glm_types.hpp>
 #else
-    #include "../shaders/color_helpers.slangh"
+    #include "../shaders/glsl_types.slangh"
 
 #endif 
 
@@ -33,9 +35,9 @@
 
 
 struct UBO{
-    IF_CPP(alignas(16) glm::) mat4x4 model;
-    IF_CPP(alignas(16) glm::) mat4x4 view;
-    IF_CPP(alignas(16) glm::) mat4x4 proj;
+//    IF_CPP(alignas(16) glm::) mat4x4 model;
+    IF_CPP(alignas(16) glm::) mat4 view;
+    IF_CPP(alignas(16) glm::) mat4 proj;
 };
 
 IF_CPP(using float16_t = _Float16;)
@@ -66,6 +68,21 @@ struct BitMask{
 };
 static CONSTEXPR_VAR BitMask shapeID_Quad = BitMask(0);
 static CONSTEXPR_VAR BitMask shapeID_Circle = BitMask(1);
+static CONSTEXPR_VAR BitMask shapeID_TextGlyph = BitMask(2);
+
 static CONSTEXPR_VAR f32 circle_edge_correction_scale = 1.2f;
+
+namespace PushConstants{
+    struct Transform2D{
+    IF_CPP(alignas(SIZE_BYTES(glm::vec2)) glm::) 
+        vec2 scale;
+    IF_CPP(alignas(SIZE_BYTES(glm::vec2)) glm::) 
+        vec2 translate;
+    };
+    struct ModelMatrix{
+    IF_CPP(alignas(SIZE_BYTES(glm::mat4)) glm::)
+        mat4 model;
+    };
+}
 
 #endif // CPP_SLANG_SHARED_HPP
