@@ -1890,8 +1890,8 @@ void ImGuiIO::AddKeyAnalogEvent(ImGuiKey key, bool down, float analog_value)
     if (key == ImGuiKey_None || !AppAcceptingEvents)
         return;
     ImGuiContext& g = *Ctx;
-    IM_ASSERT(ImGui::IsNamedKeyOrMod(key)); // Backend needs to pass a valid ImGuiKey_ constant. 0..511 values are legacy native key codes which are not accepted by this API.
-    IM_ASSERT(ImGui::IsAliasKey(key) == false); // Backend cannot submit ImGuiKey_MouseXXX values they are automatically inferred from AddMouseXXX() events.
+    IM_ASSERT_MSG(ImGui::IsNamedKeyOrMod(key),"Backend needs to pass a valid ImGuiKey_ constant. 0..511 values are legacy native key codes which are not accepted by this API.");
+    IM_ASSERT_MSG(ImGui::IsAliasKey(key) == false,"Backend cannot submit ImGuiKey_MouseXXX values they are automatically inferred from AddMouseXXX() events.");
 
     // MacOS: swap Cmd(Super) and Ctrl
     if (g.IO.ConfigMacOSXBehaviors)
@@ -1937,8 +1937,8 @@ void ImGuiIO::SetKeyEventNativeData(ImGuiKey key, int native_keycode, int native
 {
     if (key == ImGuiKey_None)
         return;
-    IM_ASSERT(ImGui::IsNamedKey(key)); // >= 512
-    IM_ASSERT(native_legacy_index == -1 || ImGui::IsLegacyKey((ImGuiKey)native_legacy_index)); // >= 0 && <= 511
+    IM_ASSERT_MSG(ImGui::IsNamedKey(key),"512");
+    IM_ASSERT_MSG(native_legacy_index == -1 || ImGui::IsLegacyKey((ImGuiKey)native_legacy_index),"0 && <= 511");
     IM_UNUSED(key);                 // Yet unused
     IM_UNUSED(native_keycode);      // Yet unused
     IM_UNUSED(native_scancode);     // Yet unused
@@ -2086,7 +2086,7 @@ ImGuiPlatformIO::ImGuiPlatformIO()
 
 ImVec2 ImBezierCubicClosestPoint(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, const ImVec2& p, int num_segments)
 {
-    IM_ASSERT(num_segments > 0); // Use ImBezierCubicClosestPointCasteljau()
+    IM_ASSERT_MSG(num_segments > 0,"Use ImBezierCubicClosestPointCasteljau()");
     ImVec2 p_last = p1;
     ImVec2 p_closest;
     float p_closest_dist2 = FLT_MAX;
@@ -3397,7 +3397,7 @@ void ImGuiListClipper::End()
 void ImGuiListClipper::IncludeItemsByIndex(int item_begin, int item_end)
 {
     ImGuiListClipperData* data = (ImGuiListClipperData*)TempData;
-    IM_ASSERT(DisplayStart < 0); // Only allowed after Begin() and if there has not been a specified range yet.
+    IM_ASSERT_MSG(DisplayStart < 0,"Only allowed after Begin() and if there has not been a specified range yet.");
     IM_ASSERT(item_begin <= item_end);
     if (item_begin < item_end)
         data->Ranges.push_back(ImGuiListClipperRange::FromIndices(item_begin, item_end));
@@ -4853,7 +4853,7 @@ void ImGui::MarkItemEdited(ImGuiID id)
     // ActiveId might have been released by the time we call this (as in the typical press/release button behavior) but still need to fill the data.
     ImGuiContext& g = *GImGui;
 
-    //IM_ASSERT(g.LastItemData.ID == id); // Failing cases include: "widgets_inputtext_scrolling", "widgets_inputtext_multiline_status", "widgets_selectable_input" = case of e.g TempInputText() overlayed manually with different ID (#2718)
+    //IM_ASSERT_MSG(g.LastItemData.ID == id,"Failing cases include: "widgets_inputtext_scrolling", "widgets_inputtext_multiline_status", "widgets_selectable_input" = case of e.g TempInputText() overlayed manually with different ID (#2718)");
     g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_EditedInternal;
     if (g.LastItemData.ItemFlags & ImGuiItemFlags_NoMarkEdited)
         return;
@@ -6111,7 +6111,7 @@ void ImGui::EndFrame()
     ImGuiPlatformImeData* ime_data = &g.PlatformImeData;
     if (g.PlatformIO.Platform_SetImeDataFn != NULL && memcmp(ime_data, &g.PlatformImeDataPrev, sizeof(ImGuiPlatformImeData)) != 0)
     {
-        IM_ASSERT(ime_data->ViewportId == IMGUI_VIEWPORT_DEFAULT_ID); // master branch
+        IM_ASSERT_MSG(ime_data->ViewportId == IMGUI_VIEWPORT_DEFAULT_ID,"master branch");
         ImGuiViewport* viewport = GetMainViewport();
         IMGUI_DEBUG_LOG_IO("[io] Calling Platform_SetImeDataFn(): WantVisible: %d, InputPos (%.2f,%.2f) for Viewport 0x%08X\n", ime_data->WantVisible, ime_data->InputPos.x, ime_data->InputPos.y, viewport->ID);
         g.PlatformIO.Platform_SetImeDataFn(&g, viewport, ime_data);
@@ -6417,7 +6417,7 @@ bool ImGui::IsItemToggledOpen()
 bool ImGui::IsItemToggledSelection()
 {
     ImGuiContext& g = *GImGui;
-    IM_ASSERT(g.CurrentMultiSelect != NULL); // Can only be used inside a BeginMultiSelect()/EndMultiSelect()
+    IM_ASSERT_MSG(g.CurrentMultiSelect != NULL,"Can only be used inside a BeginMultiSelect()/EndMultiSelect()");
     return (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_ToggledSelection) ? true : false;
 }
 
@@ -6661,7 +6661,7 @@ void ImGui::EndChild()
     ImGuiWindow* child_window = g.CurrentWindow;
 
     const ImGuiID backup_within_end_child_id = g.WithinEndChildID;
-    IM_ASSERT(child_window->Flags & ImGuiWindowFlags_ChildWindow);   // Mismatched BeginChild()/EndChild() calls
+    IM_ASSERT_MSG(child_window->Flags & ImGuiWindowFlags_ChildWindow,"Mismatched BeginChild()/EndChild() calls");
 
     g.WithinEndChildID = child_window->ID;
     ImVec2 child_size = child_window->Size;
@@ -7533,9 +7533,9 @@ bool ImGui::Begin(const char* name, bool* p_open, ImGuiWindowFlags flags)
 {
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
-    IM_ASSERT(name != NULL && name[0] != '\0');     // Window name required
-    IM_ASSERT(g.WithinFrameScope);                  // Forgot to call ImGui::NewFrame()
-    IM_ASSERT(g.FrameCountEnded != g.FrameCount);   // Called ImGui::Render() or ImGui::EndFrame() and haven't called ImGui::NewFrame() again yet
+    IM_ASSERT_MSG(name != NULL && name[0] != '\0',"Window name required");
+    IM_ASSERT_MSG(g.WithinFrameScope,"Forgot to call ImGui::NewFrame()");
+    IM_ASSERT_MSG(g.FrameCountEnded != g.FrameCount,"Called ImGui::Render() or ImGui::EndFrame() and haven't called ImGui::NewFrame() again yet");
 
     // Find or create
     ImGuiWindow* window = FindWindowByName(name);
@@ -8580,7 +8580,7 @@ bool ImGui::IsWindowHovered(ImGuiHoveredFlags flags)
 
     if ((flags & ImGuiHoveredFlags_AnyWindow) == 0)
     {
-        IM_ASSERT(cur_window); // Not inside a Begin()/End()
+        IM_ASSERT_MSG(cur_window,"Not inside a Begin()/End()");
         const bool popup_hierarchy = (flags & ImGuiHoveredFlags_NoPopupHierarchy) == 0;
         if (flags & ImGuiHoveredFlags_RootWindow)
             cur_window = GetCombinedRootWindow(cur_window, popup_hierarchy);
@@ -8638,7 +8638,7 @@ void ImGui::SetWindowPos(ImGuiWindow* window, const ImVec2& pos, ImGuiCond cond)
     if (cond && (window->SetWindowPosAllowFlags & cond) == 0)
         return;
 
-    IM_ASSERT(cond == 0 || ImIsPowerOfTwo(cond)); // Make sure the user doesn't attempt to combine multiple condition flags.
+    IM_ASSERT_MSG(cond == 0 || ImIsPowerOfTwo(cond),"Make sure the user doesn't attempt to combine multiple condition flags.");
     window->SetWindowPosAllowFlags &= ~(ImGuiCond_Once | ImGuiCond_FirstUseEver | ImGuiCond_Appearing);
     window->SetWindowPosVal = ImVec2(FLT_MAX, FLT_MAX);
 
@@ -8679,7 +8679,7 @@ void ImGui::SetWindowSize(ImGuiWindow* window, const ImVec2& size, ImGuiCond con
     if (cond && (window->SetWindowSizeAllowFlags & cond) == 0)
         return;
 
-    IM_ASSERT(cond == 0 || ImIsPowerOfTwo(cond)); // Make sure the user doesn't attempt to combine multiple condition flags.
+    IM_ASSERT_MSG(cond == 0 || ImIsPowerOfTwo(cond),"Make sure the user doesn't attempt to combine multiple condition flags.");
     window->SetWindowSizeAllowFlags &= ~(ImGuiCond_Once | ImGuiCond_FirstUseEver | ImGuiCond_Appearing);
 
     // Enable auto-fit (not done in BeginChild() path unless appearing or combined with ImGuiChildFlags_AlwaysAutoResize)
@@ -8728,7 +8728,7 @@ void ImGui::SetWindowCollapsed(ImGuiWindow* window, bool collapsed, ImGuiCond co
 
 void ImGui::SetWindowHitTestHole(ImGuiWindow* window, const ImVec2& pos, const ImVec2& size)
 {
-    IM_ASSERT(window->HitTestHoleSize.x == 0);     // We don't support multiple holes/hit test filters
+    IM_ASSERT_MSG(window->HitTestHoleSize.x == 0,"We don't support multiple holes/hit test filters");
     window->HitTestHoleSize = ImVec2ih(size);
     window->HitTestHoleOffset = ImVec2ih(pos - window->Pos);
 }
@@ -8765,7 +8765,7 @@ void ImGui::SetWindowCollapsed(const char* name, bool collapsed, ImGuiCond cond)
 void ImGui::SetNextWindowPos(const ImVec2& pos, ImGuiCond cond, const ImVec2& pivot)
 {
     ImGuiContext& g = *GImGui;
-    IM_ASSERT(cond == 0 || ImIsPowerOfTwo(cond)); // Make sure the user doesn't attempt to combine multiple condition flags.
+    IM_ASSERT_MSG(cond == 0 || ImIsPowerOfTwo(cond),"Make sure the user doesn't attempt to combine multiple condition flags.");
     g.NextWindowData.HasFlags |= ImGuiNextWindowDataFlags_HasPos;
     g.NextWindowData.PosVal = pos;
     g.NextWindowData.PosPivotVal = pivot;
@@ -8775,7 +8775,7 @@ void ImGui::SetNextWindowPos(const ImVec2& pos, ImGuiCond cond, const ImVec2& pi
 void ImGui::SetNextWindowSize(const ImVec2& size, ImGuiCond cond)
 {
     ImGuiContext& g = *GImGui;
-    IM_ASSERT(cond == 0 || ImIsPowerOfTwo(cond)); // Make sure the user doesn't attempt to combine multiple condition flags.
+    IM_ASSERT_MSG(cond == 0 || ImIsPowerOfTwo(cond),"Make sure the user doesn't attempt to combine multiple condition flags.");
     g.NextWindowData.HasFlags |= ImGuiNextWindowDataFlags_HasSize;
     g.NextWindowData.SizeVal = size;
     g.NextWindowData.SizeCond = cond ? cond : ImGuiCond_Always;
@@ -8813,7 +8813,7 @@ void ImGui::SetNextWindowScroll(const ImVec2& scroll)
 void ImGui::SetNextWindowCollapsed(bool collapsed, ImGuiCond cond)
 {
     ImGuiContext& g = *GImGui;
-    IM_ASSERT(cond == 0 || ImIsPowerOfTwo(cond)); // Make sure the user doesn't attempt to combine multiple condition flags.
+    IM_ASSERT_MSG(cond == 0 || ImIsPowerOfTwo(cond),"Make sure the user doesn't attempt to combine multiple condition flags.");
     g.NextWindowData.HasFlags |= ImGuiNextWindowDataFlags_HasCollapsed;
     g.NextWindowData.CollapsedVal = collapsed;
     g.NextWindowData.CollapsedCond = cond ? cond : ImGuiCond_Always;
@@ -8947,7 +8947,7 @@ void ImGui::SetNavFocusScope(ImGuiID focus_scope_id)
     // Then follow on manually set ParentWindowForFocusRoute field (#6798)
     for (ImGuiWindow* window = g.NavWindow->ParentWindowForFocusRoute; window != NULL; window = window->ParentWindowForFocusRoute)
         g.NavFocusRoute.push_back({ window->NavRootFocusScopeId, window->ID });
-    IM_ASSERT(g.NavFocusRoute.Size < 100); // Maximum depth is technically 251 as per CalcRoutingScore(): 254 - 3
+    IM_ASSERT_MSG(g.NavFocusRoute.Size < 100,"Maximum depth is technically 251 as per CalcRoutingScore(): 254 - 3");
 }
 
 // Focus = move navigation cursor, set scrolling, set focus window.
@@ -8982,7 +8982,7 @@ void ImGui::SetKeyboardFocusHere(int offset)
 {
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
-    IM_ASSERT(offset >= -1);    // -1 is allowed but not below
+    IM_ASSERT_MSG(offset >= -1,"1 is allowed but not below");
     IMGUI_DEBUG_LOG_FOCUS("SetKeyboardFocusHere(%d) in window \"%s\"\n", offset, window->Name);
 
     // It makes sense in the vast majority of cases to never interrupt a drag and drop.
@@ -9215,7 +9215,7 @@ void ImGui::SetCurrentFont(ImFont* font, float font_size_before_scaling, float f
 
     if (font != NULL)
     {
-        IM_ASSERT(font && font->IsLoaded());    // Font Atlas not created. Did you call io.Fonts->GetTexDataAsRGBA32 / GetTexDataAsAlpha8 ?
+        IM_ASSERT_MSG(font && font->IsLoaded(),"Font Atlas not created. Did you call io.Fonts->GetTexDataAsRGBA32 / GetTexDataAsAlpha8 ?");
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
         IM_ASSERT(font->Scale > 0.0f);
 #endif
@@ -9873,7 +9873,7 @@ bool ImGui::SetShortcutRouting(ImGuiKeyChord key_chord, ImGuiInputFlags flags, I
     if ((flags & ImGuiInputFlags_RouteTypeMask_) == 0)
         flags |= ImGuiInputFlags_RouteGlobal | ImGuiInputFlags_RouteOverFocused | ImGuiInputFlags_RouteOverActive; // IMPORTANT: This is the default for SetShortcutRouting() but NOT Shortcut()
     else
-        IM_ASSERT(ImIsPowerOfTwo(flags & ImGuiInputFlags_RouteTypeMask_)); // Check that only 1 routing flag is used
+        IM_ASSERT_MSG(ImIsPowerOfTwo(flags & ImGuiInputFlags_RouteTypeMask_),"Check that only 1 routing flag is used");
     IM_ASSERT(owner_id != ImGuiKeyOwner_Any && owner_id != ImGuiKeyOwner_NoOwner);
     if (flags & (ImGuiInputFlags_RouteOverFocused | ImGuiInputFlags_RouteUnlessBgFocused))
         IM_ASSERT(flags & ImGuiInputFlags_RouteGlobal);
@@ -9993,7 +9993,7 @@ bool ImGui::IsKeyPressed(ImGuiKey key, ImGuiInputFlags flags, ImGuiID owner_id)
     const float t = key_data->DownDuration;
     if (t < 0.0f)
         return false;
-    IM_ASSERT((flags & ~ImGuiInputFlags_SupportedByIsKeyPressed) == 0); // Passing flags not supported by this function!
+    IM_ASSERT_MSG((flags & ~ImGuiInputFlags_SupportedByIsKeyPressed) == 0,"Passing flags not supported by this function!");
     if (flags & (ImGuiInputFlags_RepeatRateMask_ | ImGuiInputFlags_RepeatUntilMask_)) // Setting any _RepeatXXX option enables _Repeat
         flags |= ImGuiInputFlags_Repeat;
 
@@ -10067,7 +10067,7 @@ bool ImGui::IsMouseClicked(ImGuiMouseButton button, ImGuiInputFlags flags, ImGui
     const float t = g.IO.MouseDownDuration[button];
     if (t < 0.0f)
         return false;
-    IM_ASSERT((flags & ~ImGuiInputFlags_SupportedByIsMouseClicked) == 0); // Passing flags not supported by this function! // FIXME: Could support RepeatRate and RepeatUntil flags here.
+    IM_ASSERT_MSG((flags & ~ImGuiInputFlags_SupportedByIsMouseClicked) == 0,"Passing flags not supported by this function! // FIXME: Could support RepeatRate and RepeatUntil flags here.");
 
     const bool repeat = (flags & ImGuiInputFlags_Repeat) != 0;
     const bool pressed = (t == 0.0f) || (repeat && t > g.IO.KeyRepeatDelay && CalcTypematicRepeatAmount(t - g.IO.DeltaTime, t, g.IO.KeyRepeatDelay, g.IO.KeyRepeatRate) > 0);
@@ -10874,8 +10874,8 @@ bool ImGui::TestKeyOwner(ImGuiKey key, ImGuiID owner_id)
 void ImGui::SetKeyOwner(ImGuiKey key, ImGuiID owner_id, ImGuiInputFlags flags)
 {
     ImGuiContext& g = *GImGui;
-    IM_ASSERT(IsNamedKeyOrMod(key) && (owner_id != ImGuiKeyOwner_Any || (flags & (ImGuiInputFlags_LockThisFrame | ImGuiInputFlags_LockUntilRelease)))); // Can only use _Any with _LockXXX flags (to eat a key away without an ID to retrieve it)
-    IM_ASSERT((flags & ~ImGuiInputFlags_SupportedBySetKeyOwner) == 0); // Passing flags not supported by this function!
+    IM_ASSERT_MSG(IsNamedKeyOrMod(key) && (owner_id != ImGuiKeyOwner_Any || (flags & (ImGuiInputFlags_LockThisFrame | ImGuiInputFlags_LockUntilRelease))),"Can only use _Any with _LockXXX flags (to eat a key away without an ID to retrieve it)");
+    IM_ASSERT_MSG((flags & ~ImGuiInputFlags_SupportedBySetKeyOwner) == 0,"Passing flags not supported by this function!");
     //IMGUI_DEBUG_LOG("SetKeyOwner(%s, owner_id=0x%08X, flags=%08X)\n", GetKeyName(key), owner_id, flags);
 
     ImGuiKeyOwnerData* owner_data = GetKeyOwnerData(&g, key);
@@ -10913,7 +10913,7 @@ bool ImGui::SetItemKeyOwner(ImGuiKey key, ImGuiInputFlags flags)
         flags |= ImGuiInputFlags_CondDefault_;
     if ((g.HoveredId == id && (flags & ImGuiInputFlags_CondHovered)) || (g.ActiveId == id && (flags & ImGuiInputFlags_CondActive)))
     {
-        IM_ASSERT((flags & ~ImGuiInputFlags_SupportedBySetItemKeyOwner) == 0); // Passing flags not supported by this function!
+        IM_ASSERT_MSG((flags & ~ImGuiInputFlags_SupportedBySetItemKeyOwner) == 0,"Passing flags not supported by this function!");
         if (!TestKeyOwner(key, id))
             return false;
         SetKeyOwner(key, id, flags & ~ImGuiInputFlags_CondMask_);
@@ -10964,7 +10964,7 @@ void ImGui::ItemHandleShortcut(ImGuiID id)
 {
     ImGuiContext& g = *GImGui;
     ImGuiInputFlags flags = g.NextItemData.ShortcutFlags;
-    IM_ASSERT((flags & ~ImGuiInputFlags_SupportedBySetNextItemShortcut) == 0); // Passing flags not supported by SetNextItemShortcut()!
+    IM_ASSERT_MSG((flags & ~ImGuiInputFlags_SupportedBySetNextItemShortcut) == 0,"Passing flags not supported by SetNextItemShortcut()!");
 
     if (g.LastItemData.ItemFlags & ImGuiItemFlags_Disabled)
         return;
@@ -11021,7 +11021,7 @@ bool ImGui::Shortcut(ImGuiKeyChord key_chord, ImGuiInputFlags flags, ImGuiID own
     // Claim mods during the press
     SetKeyOwnersForKeyChord(key_chord & ImGuiMod_Mask_, owner_id);
 
-    IM_ASSERT((flags & ~ImGuiInputFlags_SupportedByShortcut) == 0); // Passing flags not supported by this function!
+    IM_ASSERT_MSG((flags & ~ImGuiInputFlags_SupportedByShortcut) == 0,"Passing flags not supported by this function!");
     return true;
 }
 
@@ -11110,7 +11110,7 @@ static void ImGui::ErrorCheckNewFrameSanityChecks()
     // (IF YOU GET A WARNING OR COMPILE ERROR HERE: it means your assert macro is incorrectly defined!
     //  If your macro uses multiple statements, it NEEDS to be surrounded by a 'do { ... } while (0)' block.
     //  This is a common C/C++ idiom to allow multiple statements macros to be used in control flow blocks.)
-    // #define IM_ASSERT(EXPR)   if (SomeCode(EXPR)) SomeMoreCode();                    // Wrong!
+    // #define IM_ASSERT_MSG(EXPR)   if (SomeCode(EXPR)) SomeMoreCode(,"Wrong!");
     // #define IM_ASSERT(EXPR)   do { if (SomeCode(EXPR)) SomeMoreCode(); } while (0)   // Correct!
     if (true) IM_ASSERT(1); else IM_ASSERT(0);
 
@@ -11129,15 +11129,15 @@ static void ImGui::ErrorCheckNewFrameSanityChecks()
     IM_ASSERT(g.IO.DisplaySize.x >= 0.0f && g.IO.DisplaySize.y >= 0.0f  && "Invalid DisplaySize value!");
     IM_ASSERT(g.Style.CurveTessellationMaxError > 0.0f                  && "Invalid style setting!");
     IM_ASSERT(g.Style.CircleTessellationMaxError > 0.0f                 && "Invalid style setting!");
-    IM_ASSERT(g.Style.Alpha >= 0.0f && g.Style.Alpha <= 1.0f            && "Invalid style setting!"); // Allows us to avoid a few clamps in color computations
+    IM_ASSERT_MSG(g.Style.Alpha >= 0.0f && g.Style.Alpha <= 1.0f            && "Invalid style setting!","Allows us to avoid a few clamps in color computations");
     IM_ASSERT(g.Style.WindowMinSize.x >= 1.0f && g.Style.WindowMinSize.y >= 1.0f && "Invalid style setting!");
-    IM_ASSERT(g.Style.WindowBorderHoverPadding > 0.0f                   && "Invalid style setting!"); // Required otherwise cannot resize from borders.
+    IM_ASSERT_MSG(g.Style.WindowBorderHoverPadding > 0.0f                   && "Invalid style setting!","Required otherwise cannot resize from borders.");
     IM_ASSERT(g.Style.WindowMenuButtonPosition == ImGuiDir_None || g.Style.WindowMenuButtonPosition == ImGuiDir_Left || g.Style.WindowMenuButtonPosition == ImGuiDir_Right);
     IM_ASSERT(g.Style.ColorButtonPosition == ImGuiDir_Left || g.Style.ColorButtonPosition == ImGuiDir_Right);
-    IM_ASSERT(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_DisplayMask_));  // Check only 1 option is selected
-    IM_ASSERT(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_DataTypeMask_)); // "
-    IM_ASSERT(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_PickerMask_));   // "
-    IM_ASSERT(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_InputMask_));    // "
+    IM_ASSERT_MSG(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_DisplayMask_),"Check only 1 option is selected");
+    IM_ASSERT_MSG(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_DataTypeMask_),"");
+    IM_ASSERT_MSG(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_PickerMask_),"");
+    IM_ASSERT_MSG(ImIsPowerOfTwo(g.IO.ConfigColorEditFlags & ImGuiColorEditFlags_InputMask_),"");
 
     IM_ASSERT(g.Style.TreeLinesFlags == ImGuiTreeNodeFlags_DrawLinesNone || g.Style.TreeLinesFlags == ImGuiTreeNodeFlags_DrawLinesFull || g.Style.TreeLinesFlags == ImGuiTreeNodeFlags_DrawLinesToNodes);
     IM_ASSERT(g.IO.MouseSingleClickDelay > g.IO.MouseDoubleClickTime);
@@ -11956,10 +11956,10 @@ void ImGui::EndGroup()
 {
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
-    IM_ASSERT(g.GroupStack.Size > 0); // Mismatched BeginGroup()/EndGroup() calls
+    IM_ASSERT_MSG(g.GroupStack.Size > 0,"Mismatched BeginGroup()/EndGroup() calls");
 
     ImGuiGroupData& group_data = g.GroupStack.back();
-    IM_ASSERT(group_data.WindowID == window->ID); // EndGroup() in wrong window?
+    IM_ASSERT_MSG(group_data.WindowID == window->ID,"EndGroup() in wrong window?");
 
     if (window->DC.IsSetPos)
         ErrorCheckUsingSetCursorPosToExtendParentBoundaries();
@@ -12325,7 +12325,7 @@ bool ImGui::BeginTooltipEx(ImGuiTooltipFlags tooltip_flags, ImGuiWindowFlags ext
 
 void ImGui::EndTooltip()
 {
-    IM_ASSERT(GetCurrentWindowRead()->Flags & ImGuiWindowFlags_Tooltip);   // Mismatched BeginTooltip()/EndTooltip() calls
+    IM_ASSERT_MSG(GetCurrentWindowRead()->Flags & ImGuiWindowFlags_Tooltip,"Mismatched BeginTooltip()/EndTooltip() calls");
     End();
 }
 
@@ -12404,7 +12404,7 @@ bool ImGui::IsPopupOpen(const char* str_id, ImGuiPopupFlags popup_flags)
     ImGuiContext& g = *GImGui;
     ImGuiID id = (popup_flags & ImGuiPopupFlags_AnyPopupId) ? 0 : g.CurrentWindow->GetID(str_id);
     if ((popup_flags & ImGuiPopupFlags_AnyPopupLevel) && id != 0)
-        IM_ASSERT(0 && "Cannot use IsPopupOpen() with a string id and ImGuiPopupFlags_AnyPopupLevel."); // But non-string version is legal and used internally
+        IM_ASSERT_MSG(0 && "Cannot use IsPopupOpen() with a string id and ImGuiPopupFlags_AnyPopupLevel.","But non-string version is legal and used internally");
     return IsPopupOpen(id, popup_flags);
 }
 
@@ -12672,7 +12672,7 @@ bool ImGui::BeginPopupEx(ImGuiID id, ImGuiWindowFlags extra_window_flags)
     }
 
     char name[20];
-    IM_ASSERT((extra_window_flags & ImGuiWindowFlags_ChildMenu) == 0); // Use BeginPopupMenuEx()
+    IM_ASSERT_MSG((extra_window_flags & ImGuiWindowFlags_ChildMenu) == 0,"Use BeginPopupMenuEx()");
     ImFormatString(name, IM_COUNTOF(name), "##Popup_%08x", id); // No recycling, so we can close/open during the same frame
 
     bool is_open = Begin(name, NULL, extra_window_flags | ImGuiWindowFlags_Popup);
@@ -12824,7 +12824,7 @@ bool ImGui::OpenPopupOnItemClick(const char* str_id, ImGuiPopupFlags popup_flags
     {
         ImGuiWindow* window = g.CurrentWindow;
         ImGuiID id = str_id ? window->GetID(str_id) : g.LastItemData.ID; // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
-        IM_ASSERT(id != 0);                                              // You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
+        IM_ASSERT_MSG(id != 0,"You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)");
         return OpenPopupEx(id, popup_flags);
     }
     return false;
@@ -12853,7 +12853,7 @@ bool ImGui::BeginPopupContextItem(const char* str_id, ImGuiPopupFlags popup_flag
     if (window->SkipItems)
         return false;
     ImGuiID id = str_id ? window->GetID(str_id) : g.LastItemData.ID; // If user hasn't passed an ID, we can use the LastItem ID. Using LastItem ID as a Popup ID won't conflict!
-    IM_ASSERT(id != 0);                                              // You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
+    IM_ASSERT_MSG(id != 0,"You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)");
     if (IsPopupOpenRequestForItem(popup_flags, g.LastItemData.ID))
         OpenPopupEx(id, popup_flags);
     return BeginPopupEx(id, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
@@ -13083,7 +13083,7 @@ bool ImGui::IsWindowFocused(ImGuiFocusedFlags flags)
     if (flags & ImGuiFocusedFlags_AnyWindow)
         return true;
 
-    IM_ASSERT(cur_window); // Not inside a Begin()/End()
+    IM_ASSERT_MSG(cur_window,"Not inside a Begin()/End()");
     const bool popup_hierarchy = (flags & ImGuiFocusedFlags_NoPopupHierarchy) == 0;
     if (flags & ImGuiFocusedFlags_RootWindow)
         cur_window = GetCombinedRootWindow(cur_window, popup_hierarchy);
@@ -13099,7 +13099,7 @@ static int ImGui::FindWindowFocusIndex(ImGuiWindow* window)
     ImGuiContext& g = *GImGui;
     IM_UNUSED(g);
     int order = window->FocusOrder;
-    IM_ASSERT(window->RootWindow == window); // No child window (not testing _ChildWindow because of docking)
+    IM_ASSERT_MSG(window->RootWindow == window,"No child window (not testing _ChildWindow because of docking)");
     IM_ASSERT(g.WindowsFocusOrder[order] == window);
     return order;
 }
@@ -13815,7 +13815,7 @@ void ImGui::NavMoveRequestForward(ImGuiDir move_dir, ImGuiDir clip_dir, ImGuiNav
 void ImGui::NavMoveRequestTryWrapping(ImGuiWindow* window, ImGuiNavMoveFlags wrap_flags)
 {
     ImGuiContext& g = *GImGui;
-    IM_ASSERT((wrap_flags & ImGuiNavMoveFlags_WrapMask_ ) != 0 && (wrap_flags & ~ImGuiNavMoveFlags_WrapMask_) == 0); // Call with _WrapX, _WrapY, _LoopX, _LoopY
+    IM_ASSERT_MSG((wrap_flags & ImGuiNavMoveFlags_WrapMask_ ) != 0 && (wrap_flags & ~ImGuiNavMoveFlags_WrapMask_) == 0,"Call with _WrapX, _WrapY, _LoopX, _LoopY");
 
     // In theory we should test for NavMoveRequestButNoResultYet() but there's no point doing it:
     // as NavEndFrame() will do the same test. It will end up calling NavUpdateCreateWrappingRequest().
@@ -14330,7 +14330,7 @@ void ImGui::NavUpdateCreateMoveRequest()
         //GetForegroundDrawList()->AddRectFilled(scoring_rect.Min - ImVec2(1, 1), scoring_rect.Max + ImVec2(1, 1), IM_COL32(255, 100, 0, 80)); // [DEBUG] Pre-bias
         if (g.NavMoveSubmitted)
             NavBiasScoringRect(scoring_rect, window->RootWindowForNav->NavPreferredScoringPosRel[g.NavLayer], g.NavMoveDir, g.NavMoveFlags);
-        IM_ASSERT(!scoring_rect.IsInverted()); // Ensure we have a non-inverted bounding box here will allow us to remove extraneous ImFabs() calls in NavScoreItem().
+        IM_ASSERT_MSG(!scoring_rect.IsInverted(),"Ensure we have a non-inverted bounding box here will allow us to remove extraneous ImFabs() calls in NavScoreItem().");
         //GetForegroundDrawList()->AddRectFilled(scoring_rect.Min - ImVec2(1, 1), scoring_rect.Max + ImVec2(1, 1), IM_COL32(255, 100, 0, 80)); // [DEBUG] Post-bias
         //if (!g.NavScoringNoClipRect.IsInverted()) { GetForegroundDrawList()->AddRectFilled(g.NavScoringNoClipRect.Min, g.NavScoringNoClipRect.Max, IM_COL32(100, 255, 0, 80)); } // [DEBUG]
     }
@@ -14874,7 +14874,7 @@ static void ImGui::NavUpdateWindowing()
     {
         // Visuals only appears after a brief time after pressing TAB the first time, so that a fast Ctrl+Tab doesn't add visual noise
         ImGuiKeyChord shared_mods = ((g.ConfigNavWindowingKeyNext ? g.ConfigNavWindowingKeyNext : ImGuiMod_Mask_) & (g.ConfigNavWindowingKeyPrev ? g.ConfigNavWindowingKeyPrev : ImGuiMod_Mask_)) & ImGuiMod_Mask_;
-        IM_ASSERT(shared_mods != 0); // Next/Prev shortcut currently needs a shared modifier to "hold", otherwise Prev actions would keep cycling between two windows.
+        IM_ASSERT_MSG(shared_mods != 0,"Next/Prev shortcut currently needs a shared modifier to 'hold', otherwise Prev actions would keep cycling between two windows.");
         g.NavWindowingTimer += io.DeltaTime;
         g.NavWindowingHighlightAlpha = ImMax(g.NavWindowingHighlightAlpha, ImSaturate((g.NavWindowingTimer - NAV_WINDOWING_HIGHLIGHT_DELAY) / 0.05f)); // 1.0f
         if ((keyboard_next_window || keyboard_prev_window) && !just_started_windowing_from_null_focus)
@@ -15009,7 +15009,7 @@ void ImGui::NavUpdateWindowingOverlay()
     for (int n = g.WindowsFocusOrder.Size - 1; n >= 0; n--)
     {
         ImGuiWindow* window = g.WindowsFocusOrder[n];
-        IM_ASSERT(window != NULL); // Fix static analyzers
+        IM_ASSERT_MSG(window != NULL,"Fix static analyzers");
         if (!IsWindowNavFocusable(window))
             continue;
         const char* label = window->Name;
@@ -15139,7 +15139,7 @@ bool ImGui::BeginDragDropSource(ImGuiDragDropFlags flags)
         SetActiveID(source_id, NULL);
     }
 
-    IM_ASSERT(g.DragDropWithinTarget == false); // Can't nest BeginDragDropSource() and BeginDragDropTarget()
+    IM_ASSERT_MSG(g.DragDropWithinTarget == false,"Can't nest BeginDragDropSource() and BeginDragDropTarget()");
     if (!source_drag_active)
         return false;
 
@@ -15171,7 +15171,7 @@ bool ImGui::BeginDragDropSource(ImGuiDragDropFlags flags)
             ret = BeginTooltipHidden();
         else
             ret = BeginTooltip();
-        IM_ASSERT(ret); // FIXME-NEWBEGIN: If this ever becomes false, we need to Begin("##Hidden", NULL, ImGuiWindowFlags_NoSavedSettings) + SetWindowHiddenAndSkipItemsForCurrentFrame().
+        IM_ASSERT_MSG(ret,"FIXME-NEWBEGIN: If this ever becomes false, we need to Begin('##Hidden', NULL, ImGuiWindowFlags_NoSavedSettings) + SetWindowHiddenAndSkipItemsForCurrentFrame().");
         IM_UNUSED(ret);
     }
 
@@ -15208,7 +15208,7 @@ bool ImGui::SetDragDropPayload(const char* type, const void* data, size_t data_s
     IM_ASSERT(ImStrlen(type) < IM_COUNTOF(payload.DataType) && "Payload type can be at most 32 characters long");
     IM_ASSERT((data != NULL && data_size > 0) || (data == NULL && data_size == 0));
     IM_ASSERT(cond == ImGuiCond_Always || cond == ImGuiCond_Once);
-    IM_ASSERT(payload.SourceId != 0); // Not called between BeginDragDropSource() and EndDragDropSource()
+    IM_ASSERT_MSG(payload.SourceId != 0,"Not called between BeginDragDropSource() and EndDragDropSource()");
 
     if (cond == ImGuiCond_Always || payload.DataFrameCount == -1)
     {
@@ -15257,7 +15257,7 @@ bool ImGui::BeginDragDropTargetCustom(const ImRect& bb, ImGuiID id)
     if (window->SkipItems)
         return false;
 
-    IM_ASSERT(g.DragDropWithinTarget == false && g.DragDropWithinSource == false); // Can't nest BeginDragDropSource() and BeginDragDropTarget()
+    IM_ASSERT_MSG(g.DragDropWithinTarget == false && g.DragDropWithinSource == false,"Can't nest BeginDragDropSource() and BeginDragDropTarget()");
     g.DragDropTargetRect = bb;
     g.DragDropTargetClipRect = window->ClipRect; // May want to be overridden by user depending on use case?
     g.DragDropTargetId = id;
@@ -15281,7 +15281,7 @@ bool ImGui::BeginDragDropTargetViewport(ImGuiViewport* viewport, const ImRect* p
     if (!IsMouseHoveringRect(bb.Min, bb.Max, false) || (id == g.DragDropPayload.SourceId))
         return false;
 
-    IM_ASSERT(g.DragDropWithinTarget == false && g.DragDropWithinSource == false); // Can't nest BeginDragDropSource() and BeginDragDropTarget()
+    IM_ASSERT_MSG(g.DragDropWithinTarget == false && g.DragDropWithinSource == false,"Can't nest BeginDragDropSource() and BeginDragDropTarget()");
     g.DragDropTargetRect = bb;
     g.DragDropTargetClipRect = bb;
     g.DragDropTargetId = id;
@@ -15317,7 +15317,7 @@ bool ImGui::BeginDragDropTarget()
     if (g.DragDropPayload.SourceId == id)
         return false;
 
-    IM_ASSERT(g.DragDropWithinTarget == false && g.DragDropWithinSource == false); // Can't nest BeginDragDropSource() and BeginDragDropTarget()
+    IM_ASSERT_MSG(g.DragDropWithinTarget == false && g.DragDropWithinSource == false,"Can't nest BeginDragDropSource() and BeginDragDropTarget()");
     g.DragDropTargetRect = display_rect;
     g.DragDropTargetClipRect = (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_HasClipRect) ? g.LastItemData.ClipRect : window->ClipRect;
     g.DragDropTargetId = id;
@@ -15335,8 +15335,8 @@ const ImGuiPayload* ImGui::AcceptDragDropPayload(const char* type, ImGuiDragDrop
 {
     ImGuiContext& g = *GImGui;
     ImGuiPayload& payload = g.DragDropPayload;
-    IM_ASSERT(g.DragDropActive);                        // Not called between BeginDragDropTarget() and EndDragDropTarget() ?
-    IM_ASSERT(payload.DataFrameCount != -1);            // Forgot to call EndDragDropTarget() ?
+    IM_ASSERT_MSG(g.DragDropActive,"Not called between BeginDragDropTarget() and EndDragDropTarget() ?");
+    IM_ASSERT_MSG(payload.DataFrameCount != -1,"Forgot to call EndDragDropTarget() ?");
     if (type != NULL && !payload.IsDataType(type))
         return NULL;
 
@@ -15533,7 +15533,7 @@ void ImGui::LogBegin(ImGuiLogFlags flags, int auto_open_depth)
     ImGuiWindow* window = g.CurrentWindow;
     IM_ASSERT(g.LogEnabled == false);
     IM_ASSERT(g.LogFile == NULL && g.LogBuffer.empty());
-    IM_ASSERT(ImIsPowerOfTwo(flags & ImGuiLogFlags_OutputMask_)); // Check that only 1 type flag is used
+    IM_ASSERT_MSG(ImIsPowerOfTwo(flags & ImGuiLogFlags_OutputMask_),"Check that only 1 type flag is used");
 
     g.LogEnabled = g.ItemUnclipByLog = true;
     g.LogFlags = flags;

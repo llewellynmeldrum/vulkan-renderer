@@ -14,12 +14,30 @@
 
 #pragma once
 #include "cpptrace/cpptrace.hpp"
+#include <print>
+#include <iostream>
+#include <csignal>
 
 //---- Define assertion handler. Defaults to calling assert().
 // - If your macro uses multiple statements, make sure is enclosed in a 'do { .. } while (0)' block so it can be used as a single statement.
 // - Compiling with NDEBUG will usually strip out assert() to nothing, which is NOT recommended because we use asserts to notify of programmer mistakes.
-#define IM_ASSERT(_EXPR)  do{\
-    (_EXPR) ? void() : ( cpptrace::generate_trace().print());\
+#define IM_ASSERT(_EXPR)  do{           \
+    if (!(_EXPR)){                \
+        std::println(stderr, "ImGui Assertion failed:\n -> {} <- \nReason: {}\n", #_EXPR, "n/a");\
+        cpptrace::generate_trace().print();\
+        __builtin_debugtrap();\
+    }\
+}while(0)
+#define IM_ASSERT_MSG(_EXPR, MSG)  do{           \
+    if (!(_EXPR)){                \
+    std::println(\
+        std::cerr, \
+        "\033[41;4mImGui Assertion failed:" "\033[1;24m -> ({}) \033[0m\n"\
+        "\033[1;4;37mReason:\033[0;24;37m -> '{}'\033[0m\n",\
+        #_EXPR, MSG);\
+        cpptrace::generate_trace().print(std::cerr);\
+        __builtin_debugtrap();\
+    }\
 }while(0)
 //#define IM_ASSERT(_EXPR)  ((void)(_EXPR))     // Disable asserts
 
