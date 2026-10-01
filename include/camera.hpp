@@ -1,10 +1,13 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/geometric.hpp"
 #include "logger.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "glm/trigonometric.hpp"
 struct Camera{
     static inline constexpr auto WORLD_UP = glm::vec3{0,1,0};

@@ -1,6 +1,11 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "style.hpp"
+#include "cppslop.hpp"
 #include "timer.hpp"
+
 #include <cpptrace/basic.hpp>
 #include <cpptrace/utils.hpp>
 #include <cstdlib>

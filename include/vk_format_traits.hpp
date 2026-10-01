@@ -1,4 +1,7 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "vk_types.hpp"
 
 template<vk::Format tFormat>

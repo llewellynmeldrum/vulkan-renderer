@@ -13,7 +13,6 @@
 #include "stb_image.hpp"
 #include "format_specs.hpp"
 #include "file_io.hpp"
-#include "shared.hpp"
 #include "timer.hpp"
 #include "vertex.hpp"
 #include "renderer.hpp"
@@ -42,6 +41,7 @@ void Renderer::init(SDL_Window* window, glm::uvec2 window_extent) {
 
     try{
         init_vulkan();
+        init_imgui();
     }catch(vk::SystemError const& e){
         LOG_FATAL("Failed to initialize vulkan: {}", e.what());
     }

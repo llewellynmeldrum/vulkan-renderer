@@ -1,4 +1,7 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include <ranges>
 #include <stack>
 #include <ranges>
@@ -6,12 +9,12 @@
 #include <vector>
 #include <tuple>
 
-#include "cpp_slang_shared.hpp"
+#include "shared/cpp_slang_shared.hpp"
 #include "cppslop.hpp"
 #include "cpu_mesh.hpp"
 #include "font_atlas.hpp"
 #include "gpu_mesh.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "vk_types.hpp"
 #include "common_concepts.hpp"
 #include "glm_types.hpp"

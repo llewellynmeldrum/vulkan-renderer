@@ -1,4 +1,7 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_video.h"
 #include "glm/vec2.hpp"
@@ -6,7 +9,7 @@
 #include "logger.hpp"
 #include "common_concepts.hpp"
 #include "enum_map.hpp"
-#include "shared_transformations.hpp"
+#include "transformations.hpp"
 
 
 struct Input{

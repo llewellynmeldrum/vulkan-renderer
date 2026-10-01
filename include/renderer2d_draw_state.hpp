@@ -1,5 +1,8 @@
-#pragma once 
-#include "types.hpp"
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
+#include "primitive_types.hpp"
 #include "glm_types.hpp"
 struct DrawState{
     glm::vec4 outline_color{};

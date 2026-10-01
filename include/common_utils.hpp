@@ -1,12 +1,8 @@
-#pragma once 
-#define SIZE_BYTES(x)   (sizeof(x))
-#define SIZE_BITS(x)    ((sizeof(x)) * (8))
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 
-#if defined(__cplusplus)
-#include <climits>
-    static_assert(CHAR_BIT == 8);
-// We have to assume this so that the file can be included in SLANG
-#endif
-
-
+#define FWD_DECL_STRUCT(name) struct name
+#define FWD_DECL_UNION(name) union name
 

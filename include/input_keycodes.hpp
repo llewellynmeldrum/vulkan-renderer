@@ -1,9 +1,13 @@
-#pragma once 
-#include "types.hpp"
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
+#include "primitive_types.hpp"
 #include "bitmask_flags.hpp"
 #include "common_concepts.hpp"
 #include <format>
 #include <type_traits>
+#include "assert_shorthands.hpp"
 
 enum struct KeyModBits : u32{
     NONE   = 0x0000u,                           /**< no modifier is applicable. */

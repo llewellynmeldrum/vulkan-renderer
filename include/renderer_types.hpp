@@ -1,5 +1,7 @@
-#pragma once 
-#include "shared.hpp"
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "Texture2D.hpp"
 #include "input_keycodes.hpp"
 #include "vk_managed_buffers.hpp"
@@ -12,7 +14,7 @@
 #include "gpu_mesh.hpp"
 #include "heightmap.hpp"
 #include "depth_image.hpp"
-#include "shared_transformations.hpp"
+#include "transformations.hpp"
 #include "vk_swapchain.hpp"
 #include "vk_types.hpp"
 #include "renderer_buffer_helpers.hpp"

@@ -1,9 +1,12 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include <fstream>
 #include <span>
 
 #include "logger.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "unix_helpers.hpp"
 
 static constexpr inline bool DBG_FILE_READS = false;

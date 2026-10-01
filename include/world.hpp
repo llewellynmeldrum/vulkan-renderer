@@ -1,7 +1,14 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "cpu_mesh.hpp"
 #include "heightmap.hpp"
+#include "voxel.hpp"
 struct World{
+    static constexpr glm::ivec3 m_worldExtents{100, 100, 100};
+    VoxelGrid<m_worldExtents> grid{};
+    glm::vec3 center;
     //std::vector<CpuMesh> cpu_meshes;
 
     Heightmap m_heightmap{};
@@ -20,6 +27,8 @@ struct World{
 
 
     void per_frame_update(){
+        // fill the voxel array with the heightmap data
+//        for ()
 
     }
 };

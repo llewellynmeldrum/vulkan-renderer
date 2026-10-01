@@ -1,9 +1,14 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
+#include "vulkan/vulkan.hpp"
+#include <vulkan/vulkan_raii.hpp>
+
 #include "file_io.hpp"
 #include "vk_managed_buffers.hpp"
 #include "vk_types.hpp"
-#include "vulkan/vulkan.hpp"
-#include <vulkan/vulkan_raii.hpp>
+#include "numeric.hpp"
 namespace detail::helpers{
 [[nodiscard]] inline auto select_memory_type(
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,

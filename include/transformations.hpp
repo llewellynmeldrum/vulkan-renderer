@@ -1,7 +1,10 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "glm/ext/vector_float2.hpp"
 #include "glm/ext/vector_float3.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 namespace detail{
 
 inline constexpr auto logical_to_ndc(glm::vec2 pLogical, glm::vec2 winExtentLogical){

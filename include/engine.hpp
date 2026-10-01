@@ -1,4 +1,7 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include <thread>
 
 #include "platform.hpp"
@@ -7,7 +10,7 @@
 #include "world.hpp"
 #include "camera.hpp"
 
-#include "shared_transformations.hpp"
+#include "transformations.hpp"
 #include "mesh_id.hpp"
 
 struct Engine{
@@ -21,29 +24,22 @@ struct Engine{
     Input input;
     World world;
     Camera cam;
+    auto ui_draw() -> void;
 
     bool m_shouldRender         {true};
     bool m_windowResized        {false};
     bool m_worldUpdatesPaused   {false};
     bool m_shouldQuit           {false};
+    bool m_uiNavigationMode     {false};
 
-    void upload_heightmap(Heightmap const& heightmap){
-        i32 samples_per_meter = 1;
-        auto cpu_mesh = mesh_heightmap(
-            heightmap,
-            HeightMapMeshCreateInfo{
-                .num_x_samples = static_cast<u32>(samples_per_meter * heightmap.m_extentX),
-                .num_z_samples = static_cast<u32>(samples_per_meter * heightmap.m_extentZ),
-            }
-        );
-        static constexpr MeshID mesh_id = 0;
+    static inline Engine* instance = nullptr;
+    static auto get_instance() -> Engine*;
 
-        auto model = glm::mat4x4(1.0f);
-        model = glm::translate(model,heightmap.m_world_center);
-        rend.upload_mesh3d(mesh_id, cpu_mesh, model);
-    }
+    auto upload_heightmap(Heightmap const& heightmap)
+    -> void;
 
  private:
+    void toggle_ui_mode();
     void poll_events();
     void handle_window_resize();
     void handle_input_actions();

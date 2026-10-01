@@ -4,6 +4,11 @@ cmake_minimum_required(VERSION 4.3.3)
 set(SLANGC_EXECUTABLE
     "/usr/local/bin/slangc"
 )
+
+set(SLANGC_INCLUDE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 find_program(
     SLANGC_EXECUTABLE
     NAMES
@@ -57,6 +62,7 @@ function (add_slang_shader_target TARGET)
         COMMAND 
             ${SLANGC_EXECUTABLE} 
             ${SHADER_SOURCE} 
+            -I ${SLANGC_INCLUDE_PATH}
             -target spirv 
             -profile ${SPIRV_PROFILE}
             -emit-spirv-directly 

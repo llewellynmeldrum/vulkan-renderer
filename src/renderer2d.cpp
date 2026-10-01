@@ -3,7 +3,7 @@
 
 #include "file_io.hpp"
 #include "format_specs.hpp"
-#include "cpp_slang_shared.hpp"
+#include "shared/cpp_slang_shared.hpp"
 #include "stb_truetype.hpp"
 #include "stb_image_write.hpp"
 #include <span>
@@ -95,14 +95,15 @@ struct GlyphInstance{
 */
 // pos = 
 auto Renderer2D::add_text(std::string_view text, glm::vec2 wTopLeft) -> void {
-    // NOTE: No wrapping for now.
-
     auto const draw_st = get_draw_state();
     // 1. select the atlas 
     auto const font_size_selection = font_atlas.select_atlas_size(draw_st.font_height);
 
     auto pen = glm::vec2{wTopLeft};
-    for (const auto ch: text){
+    for (auto ch: text){
+        if (ch < font_atlas.code_point_begin_idx || ch > font_atlas.code_point_end_idx){
+            ch = '?';
+        }
         auto quad_corners = font_atlas.get_glyph_quad_2D(pen,ch,font_size_selection);
         add_glyph_quad(quad_corners, font_size_selection);
     }

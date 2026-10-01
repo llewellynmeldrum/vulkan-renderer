@@ -191,6 +191,7 @@ auto Renderer::record_commands(
     m_2d_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
     draw_mesh(cmdBuf, m_rend2d.m_gpu_mesh);
 
+    record_imgui_commands(cmdBuf);
     cmdBuf.endRendering();
     vk_util::transition_image_layout(
        cmdBuf, swapchainImage, 
@@ -242,7 +243,9 @@ auto acquireNextImage(Swapchain const& swapchain, FrameData const& frame){
     return AcquiredImage{imageIndex, res};
 }
 
-void Renderer::draw(Camera const& cam) {
+auto Renderer::draw(
+    Camera const& cam
+) -> void{
     auto const& frame = get_current_frame();
     auto fenceRV = m_vkDevice.waitForFences(*frame.fence, vk::True, numeric_max<u64>);
     if (fenceRV != vk::Result::eSuccess){

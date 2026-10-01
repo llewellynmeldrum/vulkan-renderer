@@ -1,11 +1,14 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 
 #include <mdspan>
 
 #include "FastNoiseLite.h"
 #include "glm_types.hpp"
 #include "minmax.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "cpu_mesh.hpp"
 
 struct HeightmapCreateInfo{

@@ -1,7 +1,10 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 
-#include "shared_transformations.hpp"
-#include "types.hpp"
+#include "transformations.hpp"
+#include "primitive_types.hpp"
 #include "glm_types.hpp"
 #include "logger.hpp"
 #include "sdl3_types.hpp"
@@ -15,6 +18,9 @@ struct Platform{
     auto handle_window_resize(glm::vec2 windowLogicalExtent)
     -> void;
     auto cleanup() -> void;
+
+    bool relative_cursor_mode = false;
+    auto toggle_relative_cursor_mode() -> void;
 
     auto get_window_handle() const
     -> SDL_Window*;

@@ -1,6 +1,9 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "glm_types.hpp"
 // expects 8 bit r,g,b
 // returns component-wise normalized (i.e [0,1])  glm::vec3 rgb

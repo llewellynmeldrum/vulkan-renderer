@@ -2,7 +2,7 @@
 
 #include "glm/detail/qualifier.hpp"
 #include "glm/ext/matrix_float4x4.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include <format>
 #include <type_traits>
 

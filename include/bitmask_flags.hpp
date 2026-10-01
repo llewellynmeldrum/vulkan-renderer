@@ -1,4 +1,7 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include "common_concepts.hpp"
 template<typename E> requires is_enum<E>
 struct Flags{

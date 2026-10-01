@@ -25,14 +25,22 @@ Platform::init(
         LOG_FATAL("Failed to init window : {}", SDL_GetError());
     }
 
-    if (!SDL_SetWindowRelativeMouseMode(m_window, true)){
-        LOG_FATAL("Failed to set relative mouse mode: {}", SDL_GetError());
-    }
+    toggle_relative_cursor_mode();
     m_pixelSize = SDL_GetWindowPixelDensity(m_window);
     if (m_pixelSize == 0.0f){
         LOG_FATAL("Failed to get window pixel density: {}", SDL_GetError());
     }
     handle_window_resize(get_window_extent_logical());
+}
+
+auto Platform::toggle_relative_cursor_mode() -> void{
+    relative_cursor_mode = !relative_cursor_mode;
+    if (!relative_cursor_mode){
+        SDL_WarpMouseInWindow(m_window,m_windowLogicalExtent.x*0.5f, m_windowLogicalExtent.y*0.5f);
+    }
+    if (!SDL_SetWindowRelativeMouseMode(m_window, relative_cursor_mode)){
+        LOG_FATAL("Failed to set relative mouse mode: {}", SDL_GetError());
+    }
 }
 
 auto Platform::get_window_handle() const

@@ -1,9 +1,12 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 
 #include "glm/ext/matrix_float4x4.hpp"
 #include "vk_types.hpp"
+#include "shared/cpp_slang_shared.hpp"
 #include <vulkan/vulkan_raii.hpp>
-#include "cpp_slang_shared.hpp"
 
 
 struct AllocatedImage{

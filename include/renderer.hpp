@@ -1,11 +1,14 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 #include <unordered_map>
 
 #include "byte_span.hpp"
 #include "push_constants.hpp"
 #include "renderer2d.hpp"
 #include "renderer_buffer_helpers.hpp"
-#include "shared_transformations.hpp"
+#include "transformations.hpp"
 #include "renderer_types.hpp"
 #include "mesh_id.hpp"
 #include "vk_image_helpers.hpp"
@@ -20,12 +23,13 @@ FWD_DECL_STRUCT(SDL_KeyboardEvent);
 struct Renderer {
   public:
     static constexpr auto                k_shader_spirv_path = "shaders/bin/main_shaders.spv"sv;
+    static constexpr auto                k_guiMainScale = 1.5f;
     static constexpr u32                 k_syncFrameCount = 2;
     static constexpr u32                 k_API_VER = vk::ApiVersion13;
     static constexpr bool                k_useValidationLayers{true};
 
 
-    Renderer2D                          m_rend2d;
+    Renderer2D                           m_rend2d;
     // handles 
     VmaAllocator                         m_allocator;
     SDL_Window*                          m_window{};
@@ -132,11 +136,10 @@ struct Renderer {
     ) 
     -> void;
 
-    auto cleanup() 
-    -> void;
+    auto cleanup() -> void;
+    auto cleanup_imgui() -> void;
 
-    auto draw(Camera const& cam) 
-    -> void;
+    auto draw( Camera const& cam) -> void;
 
     auto present_image(u32 imageIndex, vk::Result acquire_res) 
     -> void;
@@ -163,6 +166,8 @@ struct Renderer {
     auto recreate_swapchain() -> void;
 
     auto init_vulkan() -> void;
+    auto init_imgui() -> void;
+    auto record_imgui_commands(vk::raii::CommandBuffer const& cmdBuf) -> void;
 
     auto init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) -> void;
     auto init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) -> void;

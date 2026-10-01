@@ -10,7 +10,7 @@
 
 #include "font_atlas.hpp"
 #include "cppslop.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "byte_span.hpp"
 
 

@@ -1,6 +1,9 @@
 
-#pragma once 
-#include "types.hpp"
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
+#include "primitive_types.hpp"
 #include <charconv>
 #include <optional>
 #include <string>

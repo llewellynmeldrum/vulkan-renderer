@@ -1,5 +1,7 @@
 #include "engine.hpp"
 #include "magic_enum.hpp"
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
 
 void Engine::handle_window_resize(){
     using namespace std::chrono_literals;
@@ -18,11 +20,26 @@ void Engine::handle_window_resize(){
     rend.handle_window_resize(windowLogicalExtent);
 }
 
+void Engine::toggle_ui_mode(){
+    m_uiNavigationMode = !m_uiNavigationMode;
+    auto& io = ImGui::GetIO();
+    if (m_uiNavigationMode){
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+    }else{
+        io.ConfigFlags |=  ImGuiConfigFlags_NoMouse;
+    }
+    platform.toggle_relative_cursor_mode();
+}
 void Engine::handle_input_actions(){
     auto rotate_speed = f32{1.0f};
     auto move_speed = f32{0.1f};
 
-    cam.handle_mouse_movement(input.mouse_pos_logical_movement() / 1000.0f);
+    if (input.just_pressed(KeyCode::TAB)){
+        toggle_ui_mode();
+    }
+    if (!m_uiNavigationMode){
+        cam.handle_mouse_movement(input.mouse_pos_logical_movement() / 1000.0f);
+    }
 
     if (input.just_pressed(KeyCode::T)){
         rend.toggle_wireframe();
@@ -74,16 +91,45 @@ void Engine::report_resize_event(){
 }
 
 void Engine::handle_event_reporting(SDL_Event const& e){
+    auto& io = ImGui::GetIO();
     auto event_type = static_cast<SDL_EventType>(e.type);
     switch (event_type){
-        case SDL_EVENT_QUIT:             { report_quit_event();                 break; }
-        case SDL_EVENT_WINDOW_MINIMIZED: { report_minimize_event();             break; }
-        case SDL_EVENT_WINDOW_RESTORED:  { report_unminimize_event();           break; }
-        case SDL_EVENT_WINDOW_RESIZED:   { report_resize_event();               break; }
-        case SDL_EVENT_KEY_DOWN:         { input.report_keydown(e.key);         break; }
-        case SDL_EVENT_KEY_UP:           { input.report_keyup(e.key);           break; }
-        case SDL_EVENT_MOUSE_MOTION:     { input.report_mouse_moved(e.motion);  break; }
-        case SDL_EVENT_MOUSE_WHEEL:      { input.report_scroll(e.wheel);        break; }
+        case SDL_EVENT_QUIT:             {
+            report_quit_event();
+            break; 
+        }
+        case SDL_EVENT_WINDOW_MINIMIZED: {
+            report_minimize_event();
+            break;
+        }
+        case SDL_EVENT_WINDOW_RESTORED:  {
+            report_unminimize_event();
+            break;
+        }
+        case SDL_EVENT_WINDOW_RESIZED:   {
+            report_resize_event();
+            break;
+        }
+        case SDL_EVENT_KEY_UP:           {
+            input.report_keyup(e.key);           
+            break;
+        }
+        case SDL_EVENT_KEY_DOWN:         {
+            if (io.WantCaptureKeyboard == false){
+                input.report_keydown(e.key);         
+            }
+            break; 
+        }
+        case SDL_EVENT_MOUSE_MOTION:     {
+            input.report_mouse_moved(e.motion);  
+            break; 
+        }
+        case SDL_EVENT_MOUSE_WHEEL:      {
+            if (io.WantCaptureMouse == false){
+                input.report_scroll(e.wheel);
+            }
+            break;
+        }
         default:{
             LOG_WARN("Unhandled event of type '{}'.", magic_enum::enum_name(event_type));
             break;
@@ -94,6 +140,7 @@ void Engine::handle_event_reporting(SDL_Event const& e){
 void Engine::poll_events(){
     SDL_Event e{};
     while ((SDL_PollEvent(&e)) != 0) {
+        ImGui_ImplSDL3_ProcessEvent(&e);
         handle_event_reporting(e);
     }
     input.cur.key_mod_state = KeyMod(SDL_GetModState());

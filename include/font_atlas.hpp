@@ -1,4 +1,7 @@
-#pragma once 
+#pragma once
+#ifndef __cplusplus
+	#error "This header is intended for c++ only."
+#endif // __cplusplus
 
 #include <libassert/assert.hpp>
 #include <range/v3/algorithm/find_if.hpp>
@@ -7,7 +10,7 @@
 
 #include "Texture2D.hpp"
 #include "cppslop.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 #include "file_io.hpp"
 #include "vertex.hpp"
 template<typename T, typename ...Args>

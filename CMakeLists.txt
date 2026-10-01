@@ -66,13 +66,13 @@ target_link_libraries(vulkan_test0 PRIVATE
 
 # VMA (Vulkan Memory Allocator)
 # ---------------------------------------
-target_include_directories(vulkan_test0 PRIVATE
+target_include_directories(vulkan_test0 SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/VulkanMemoryAllocator/include"
 )
 
 # GLM (openGL Mathematics)
 # ---------------------------------------
-target_include_directories(vulkan_test0 PRIVATE
+target_include_directories(vulkan_test0 SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/OpenGL-Mathematics"
 )
 target_compile_definitions(vulkan_test0
@@ -82,7 +82,11 @@ target_compile_definitions(vulkan_test0
 
 # SDL3
 # ---------------------------------------
-add_subdirectory(external/sdl3 EXCLUDE_FROM_ALL)
+add_subdirectory(
+    external/sdl3
+    EXCLUDE_FROM_ALL
+    SYSTEM
+)
 target_link_libraries(vulkan_test0 PRIVATE
     SDL3::SDL3
 )
@@ -90,7 +94,7 @@ target_link_libraries(vulkan_test0 PRIVATE
 # CPPTRACE
 # ---------------------------------------
 if (ENABLE_CPPTRACE)
-    target_include_directories(vulkan_test0 PRIVATE
+    target_include_directories(vulkan_test0 SYSTEM PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/external/cpptrace"
     )
     set(CPPTRACE_BUILD_SHARED   OFF)   # static ( no runtime .dylib bullshit)
@@ -102,10 +106,13 @@ endif()
 
 # LIBASSERT
 # ---------------------------------------
-target_include_directories(vulkan_test0 PRIVATE
+target_include_directories(vulkan_test0 SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/libassert"
 )
-add_subdirectory(external/libassert)
+add_subdirectory(
+    external/libassert
+    SYSTEM
+)
 target_link_libraries(vulkan_test0 PRIVATE
     libassert::assert
 )
@@ -113,7 +120,7 @@ target_link_libraries(vulkan_test0 PRIVATE
 
 # MAGIC ENUM
 # ---------------------------------------
-target_include_directories(vulkan_test0 PRIVATE
+target_include_directories(vulkan_test0 SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/magic_enum"
 )
 set(MAGIC_ENUM_OPT_BUILD_TESTS OFF)
@@ -123,7 +130,7 @@ FetchContent_Declare(magic_enum SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/magic_en
 
 # REFLECT CPP
 # ---------------------------------------
-target_include_directories(vulkan_test0 PRIVATE
+target_include_directories(vulkan_test0 SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/reflect-cpp"
 )
 FetchContent_Declare(reflect_cpp SOURCE_DIR 
@@ -136,10 +143,18 @@ target_link_libraries(vulkan_test0 PRIVATE
 
 # IMGUI
 # ---------------------------------------
-target_include_directories(vulkan_test0 PRIVATE
+target_include_directories(vulkan_test0 SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/misc/cpp"
 )
-add_subdirectory(external/imgui)
+add_subdirectory(
+    external/imgui
+    SYSTEM
+)
+target_compile_options(SDL3-shared PRIVATE
+    -Wno-unused-but-set-global
+)
 target_link_libraries(vulkan_test0 PRIVATE
     imgui
 )

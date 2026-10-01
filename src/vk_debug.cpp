@@ -6,7 +6,7 @@
 
 #include "vk_debug.hpp"
 #include "style.hpp"
-#include "types.hpp"
+#include "primitive_types.hpp"
 
 namespace detail::debug{
 static std::string format_vk_error(vk::DebugUtilsMessengerCallbackDataEXT const* d){

@@ -1,0 +1,5 @@
+#pragma once 
+float3 invert(float3 val){
+    return 1.0 - val;
+}
+

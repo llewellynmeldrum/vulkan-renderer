@@ -1,0 +1,8 @@
+#pragma once 
+namespace glm{
+typealias vec2 = vector<float,2>;
+typealias vec3 = vector<float,3>;
+typealias vec4 = vector<float,4>;
+typealias mat4 = matrix<float,4,4>;
+typealias mat4x4 = matrix<float,4,4>;
+} // namespace glm
