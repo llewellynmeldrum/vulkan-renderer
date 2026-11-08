@@ -26,7 +26,7 @@ auto Engine::init() -> void{
 
 
     upload_heightmap(world.m_heightmap);
-    auto const mid = rend.m_windowLogicalExtent /2.0f ;
+    auto const mid = rend.m_rendContext.windowLogicalExtent /2.0f ;
     rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(0,255,0,255) });
     // screen center should be top left, with length of 200 lpx (logical pixels)
 //    rend.m_rend2d.add_rect(mid + glm::vec2{-200,-200}, glm::vec2(400.0f));

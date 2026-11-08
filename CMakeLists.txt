@@ -208,8 +208,19 @@ add_slang_shader_target(
         fragMain 
 )
 
+add_slang_shader_target(
+    voxel_dda
+
+    SOURCE
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/voxel_dda.slang"
+
+    ENTRY_POINTS
+        vertMain 
+        fragMain 
+)
 
 add_dependencies(vulkan_test0 
+    voxel_dda
     main_shaders
     shaders2d
 )

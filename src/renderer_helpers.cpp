@@ -6,25 +6,28 @@
 #include "vulkan/vulkan.hpp"
 #include "renderer_init.hpp"
 void Renderer::handle_window_resize(glm::vec2 glm_windowLogicalExtent){
-    m_windowLogicalExtent = glm_windowLogicalExtent; 
-    m_windowPixelExtent = logical_to_pixel(glm_windowLogicalExtent);
+    m_rendContext.windowLogicalExtent = glm_windowLogicalExtent; 
+    m_rendContext.windowPixelExtent = logical_to_pixel(glm_windowLogicalExtent);
     recreate_swapchain();
 }
 
 void Renderer::recreate_swapchain() {
     using namespace std::chrono_literals;
-    m_vkDevice.waitIdle();
-    m_swapchain.descriptor.clear();
+    m_gpuContext.device.waitIdle();
+    m_gpuContext.swapchain.descriptor.clear();
     auto swap_settings = SwapchainSettings{
-        .physical_device = m_vkPhysicalDevice,
-        .device = m_vkDevice,
-        .surface = m_vkSurface,
-        .extent_px = detail::to_vk_extent(m_windowPixelExtent),
+        .physical_device = m_gpuContext.physicalDevice,
+        .device = m_gpuContext.device,
+        .surface = m_gpuContext.surface,
+    // BUG: 
+    // is this a bug? Shouldnt you be asking SDL what the new framebuffer size is? Like when you first create the swap
+    // chain, you call `get_framebuffer_size()`
+        .extent_px = detail::to_vk_extent(m_rendContext.windowPixelExtent),
     };
-    m_swapchain = detail::make_swapchain(swap_settings);
+    m_gpuContext.swapchain = detail::make_swapchain(swap_settings);
     // BUG:
     // need to recreate the depth attachment as well 
-    m_requiresSwapchainRecreation = false;
+    m_rendContext.requiresSwapchainRecreation = false;
 }
 
 void Renderer::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset) const{
@@ -34,19 +37,19 @@ void Renderer::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::De
 }
 
 bool Renderer::is_initialized() { 
-    return m_window; 
+    return m_rendContext.window != nullptr; 
 }
 
 [[nodiscard]]
 auto Renderer::get_current_frame_index()
 const -> u32{
-    return m_frameCount % k_syncFrameCount;
+    return m_rendContext.frameCount % k_syncFrameCount;
 }
 
 [[nodiscard]]
 vk::Extent2D Renderer::get_framebuffer_size() const noexcept{
     int w{},h{};
-    SDL_GetWindowSizeInPixels(m_window, &w,&h);
+    SDL_GetWindowSizeInPixels(m_rendContext.window, &w,&h);
     return vk::Extent2D{st_cast<u32>(w),st_cast<u32>(h)};
 }
 auto Renderer::toggle_wireframe()
@@ -61,8 +64,8 @@ auto Renderer::toggle_wireframe()
 auto Renderer::get_viewport() const
 -> vk::Viewport{
     return {
-        m_viewportOffset.x, m_viewportOffset.y,
-        m_windowPixelExtent.x, m_windowPixelExtent.y,
+        m_rendContext.viewportOffset.x, m_rendContext.viewportOffset.y,
+        m_rendContext.windowPixelExtent.x, m_rendContext.windowPixelExtent.y,
         k_depthMin, k_depthMax
     };
 }
@@ -70,12 +73,12 @@ auto Renderer::get_scissor() const
 -> vk::Rect2D{
     return {
         {
-            st_cast<i32>(m_viewportOffset.x),
-            st_cast<i32>(m_viewportOffset.y)
+            st_cast<i32>(m_rendContext.viewportOffset.x),
+            st_cast<i32>(m_rendContext.viewportOffset.y)
         },
         {
-            st_cast<u32>(m_windowPixelExtent.x),
-            st_cast<u32>(m_windowPixelExtent.y)
+            st_cast<u32>(m_rendContext.windowPixelExtent.x),
+            st_cast<u32>(m_rendContext.windowPixelExtent.y)
         },
     };
 }

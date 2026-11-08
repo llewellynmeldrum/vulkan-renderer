@@ -3,6 +3,9 @@
 	#error "This header is intended for c++ only."
 #endif // __cplusplus
 #include "common_concepts.hpp"
+#include "bitfield_helpers.hpp"
+
+
 template<typename E> requires is_enum<E>
 struct Flags{
     using underlying_t = std::underlying_type_t<E>;
@@ -12,7 +15,7 @@ struct Flags{
 
     constexpr underlying_t raw() const noexcept{ return m_bits;}
 
-    constexpr bool has(E e) const{ return (m_bits & std::to_underlying(e)) == std::to_underlying(e); };
+    constexpr bool has(E e) const{ return bitfield_has_any(m_bits, e);};
     constexpr inline Flags& operator|=(Flags rhs){ return *this = (*this | rhs); }
     constexpr inline Flags& operator&=(Flags rhs){ return *this = (*this & rhs); }
     constexpr inline Flags& operator^=(Flags rhs){ return *this = (*this ^ rhs); }
@@ -41,6 +44,10 @@ constexpr inline auto operator^(Flags<E> lhs, Flags<E> rhs){
 template<typename T>
 struct enum_bitwise_or_opt_in{
     static constexpr bool enabled = false;
+};
+#define ENABLE_ENUM_BITWISE(T)\
+template<> struct enum_bitwise_or_opt_in<T> {\
+    static constexpr inline bool enabled = true;\
 };
 
 template<typename E>

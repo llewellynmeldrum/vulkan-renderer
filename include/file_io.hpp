@@ -15,10 +15,9 @@ template<typename tOutputType = std::vector<char>>
 static constexpr inline auto read_file_contents(std::string_view filename)
 -> tOutputType{
     using OutputType = tOutputType;
-
     auto const filename_str = std::string(filename);
     std::ifstream file_stream(filename_str, std::ios::binary);
-    ASSERT(file_stream.is_open());
+    ASSERT(file_stream.is_open(), "Unable to open file", filename_str);
     i64 sz = unix::get_file_size(filename_str);
     auto file_buf = std::vector<char>(sz, '\0');
     file_stream.read(file_buf.data(), sz);

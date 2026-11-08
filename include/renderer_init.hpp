@@ -21,15 +21,13 @@ struct InstanceContext{
     vk::raii::Instance m_vkInstance{nullptr};
     vk::raii::DebugUtilsMessengerEXT m_vkDebugMessenger {nullptr};
 };
-[[nodiscard]] inline auto
-make_vk_instance(
+[[nodiscard]] inline auto make_vk_instance(
     bool m_useValidationLayers,
     vk::raii::Context const& m_vkContext,
     u32 API_VER,
     char const* app_name="n/a",
     char const* engine_name="n/a"
-) -> InstanceContext
-{
+) -> InstanceContext {
     // sdl requires some extensions for its windowing stuff
     auto ctx = InstanceContext{};
     u32 ext_count{};
@@ -96,8 +94,7 @@ make_vk_instance(
     return ctx;
 }
 
-[[nodiscard]] inline auto
-make_vk_surface(
+[[nodiscard]] inline auto make_vk_surface(
     vk::raii::Instance const& instance,
     SDL_Window* window
 ) -> vk::raii::SurfaceKHR
@@ -214,8 +211,7 @@ make_vma_allocator(
     vk::raii::PhysicalDevice const& m_vkPhysicalDevice,
     vk::raii::Device const& m_vkDevice,
     vk::raii::Instance const& m_vkInstance
-) -> VmaAllocator {
-    auto m_allocator = VmaAllocator{};
+) -> RaiiVmaAllocator {
     auto vma_vulkan_functions = VmaVulkanFunctions{
         .vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr )SDL_Vulkan_GetVkGetInstanceProcAddr(),
         .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
@@ -228,12 +224,7 @@ make_vma_allocator(
         .instance = *m_vkInstance,
         .vulkanApiVersion = VK_API_VERSION_1_4,
     };
-
-    auto res = vmaCreateAllocator(&create_info, &m_allocator);
-    if (res != VkResult::VK_SUCCESS){
-        LOG_FATAL("Vulkan Memory Allocator failed to initialize");
-    }
-    return m_allocator;
+    return RaiiVmaAllocator::create(create_info);
 }
 
 [[nodiscard]] inline auto
@@ -271,13 +262,14 @@ make_swapchain(
     auto caps = in.physical_device.getSurfaceCapabilitiesKHR(in.surface);
     auto extent = in.extent_px;
     static constexpr auto UNDEFINED_EXTENT {numeric_max<u32>};
-    bool surface_has_fixed_extents = caps.currentExtent.width != UNDEFINED_EXTENT;
-    if (!surface_has_fixed_extents){
-        extent=in.extent_px;
+    bool const surface_has_no_fixed_extent = caps.currentExtent.width == UNDEFINED_EXTENT;
+    if (surface_has_no_fixed_extent){
         auto const max = caps.maxImageExtent;
         auto const min = caps.minImageExtent;
-        extent.width = std::clamp(extent.width, min.width, max.width);
-        extent.height = std::clamp(extent.height, min.height, max.height);
+        extent = {
+            std::clamp(in.extent_px.width, min.width, max.width),
+            std::clamp(in.extent_px.height, min.height, max.height)
+        };
     }
 
     auto image_count = caps.minImageCount+1;

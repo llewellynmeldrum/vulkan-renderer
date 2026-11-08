@@ -1,4 +1,5 @@
 #pragma once
+#include "vma_raii.hpp"
 #ifndef __cplusplus
 	#error "This header is intended for c++ only."
 #endif // __cplusplus
@@ -29,20 +30,63 @@ struct Renderer {
     static constexpr bool                k_useValidationLayers{true};
 
 
-    Renderer2D                           m_rend2d;
+
+    struct GpuContext{
+        u32                                  queueFamily{};
+        vk::raii::Context                    context{};
+        vk::raii::Instance                   instance{nullptr};
+        vk::raii::DebugUtilsMessengerEXT     debugMessenger{nullptr};
+        vk::raii::SurfaceKHR                 surface{nullptr};
+
+        vk::raii::PhysicalDevice             physicalDevice{nullptr};
+        vk::raii::Device                     device{nullptr};
+        vk::raii::Queue                      queue{nullptr};
+
+        Swapchain                            swapchain{};
+
+        vk::raii::DescriptorPool             descriptorPool{nullptr};
+        vk::raii::DescriptorSetLayout        descriptorSetLayout{nullptr};
+        std::vector<vk::raii::DescriptorSet> descriptorSets; // indexed by frame
+        
+        // blocks thread until the gpu is idle 
+        auto await_idle() const -> void{
+            device.waitIdle();
+        }
+    };
+    GpuContext m_gpuContext;
     // handles 
-    VmaAllocator                         m_allocator;
-    SDL_Window*                          m_window{};
+    RaiiVmaAllocator                    m_allocator{nullptr};
 
     // primitive types
-    u32                                  m_frameCount{0};
-    glm::vec2                            m_windowLogicalExtent;
-    glm::vec2                            m_windowPixelExtent;
-    bool                                 m_requiresSwapchainRecreation{};
-    glm::vec2                            m_viewportOffset {0.0f,0.0f};
+    struct RenderContext{ 
+        SDL_Window*                          window{};
+        std::vector<FrameData>               inflightFrames{};
+        u32                                  frameCount{0};
+        glm::vec2                            windowLogicalExtent;
+        glm::vec2                            windowPixelExtent;
+        glm::vec2                            viewportOffset {0.0f,0.0f};
+        bool                                 requiresSwapchainRecreation{};
+    };
+    RenderContext m_rendContext;
 
-    // vulkan types
 
+
+    Texture2D                            m_texture{};
+    DepthAttachment                      m_depthImage{nullptr};
+
+    vk::PolygonMode                      m_vkPolygonMode {vk::PolygonMode::eFill};
+    static constexpr inline auto vk_enabledDynamicState = std::array{
+        vk::DynamicState::eViewport, 
+        vk::DynamicState::eScissor,
+        vk::DynamicState::ePolygonModeEXT,
+    };
+
+    Pipeline<PushConstants::ModelMatrix>                m_fill_pipeline{};
+    Pipeline<PushConstants::ModelMatrix>                m_line_pipeline{};
+    Pipeline<PushConstants::Transform2D>                m_2d_pipeline{};
+    Pipeline<PushConstants::Transform2D>                m_voxel_dda_pipeline{};
+
+    // MESH BULLSHIT (NOTE: this probably doesnt belong here)
     // 3d mesh soas 
     std::unordered_map<MeshID, GpuMesh3D>     m_gpu_meshes3d;
     std::unordered_map<MeshID, glm::mat4x4> m_model_matrices;
@@ -60,41 +104,16 @@ struct Renderer {
     template<typename tVertexType, typename tIndexType>
     auto make_gpu_mesh_impl(CpuMesh<tVertexType,tIndexType> const& cpu_mesh) -> GpuMesh<tVertexType,tIndexType>;
 
-    u32                                  m_vkQueueFamily{};
-
-    vk::raii::Context                    m_vkContext{};
-    vk::raii::Instance                   m_vkInstance{nullptr};
-    vk::raii::DebugUtilsMessengerEXT     m_vkDebugMessenger{nullptr};
-    vk::raii::SurfaceKHR                 m_vkSurface{nullptr};
-
-    vk::raii::PhysicalDevice             m_vkPhysicalDevice{nullptr};
-    vk::raii::Device                     m_vkDevice{nullptr};
-    vk::raii::Queue                      m_vkQueue{nullptr};
-
-    Swapchain                            m_swapchain{};
-    std::vector<FrameData>               m_inflightFrames{};
-
-    vk::raii::DescriptorPool             m_vkDescriptorPool{nullptr};
-    vk::raii::DescriptorSetLayout        m_vkDescriptorSetLayout{nullptr};
-    std::vector<vk::raii::DescriptorSet> m_vkDescriptorSets; // indexed by frame
-
-    Texture2D                            m_texture{};
-    DepthAttachment                      m_depthImage{nullptr};
-
-    Pipeline<PushConstants::ModelMatrix>                m_fill_pipeline{};
-    Pipeline<PushConstants::ModelMatrix>                m_line_pipeline{};
-    Pipeline<PushConstants::Transform2D>         m_2d_pipeline{};
+    Renderer2D                           m_rend2d;
+    using ShaderModuleWrapper = detail::helpers::ShaderModuleWrapper;
+    auto init_fill_pipeline     (ShaderModuleWrapper const& shader) -> void;
+    auto init_line_pipeline     (ShaderModuleWrapper const& shader) -> void;
+    auto init_2d_pipeline       (ShaderModuleWrapper const& shader) -> void;
+    auto init_voxel_dda_pipeline(ShaderModuleWrapper const& shader) -> void;
 
     // dynamic vulkan state
-    vk::PolygonMode                      m_vkPolygonMode {vk::PolygonMode::eFill};
-    static constexpr inline auto vk_enabledDynamicState = std::array{
-        vk::DynamicState::eViewport, 
-        vk::DynamicState::eScissor,
-        vk::DynamicState::ePolygonModeEXT,
-    };
 
-    auto
-    get_framebuffer_size() const noexcept
+    auto get_framebuffer_size() const noexcept
     -> vk::Extent2D;
 
     auto toggle_wireframe()
@@ -120,7 +139,7 @@ struct Renderer {
 
 
     auto& get_current_frame(this auto& self) {
-        return self.m_inflightFrames.at(self.get_current_frame_index());
+        return self.m_rendContext.inflightFrames.at(self.get_current_frame_index());
     }
 
     [[nodiscard]]
@@ -133,35 +152,29 @@ struct Renderer {
     auto init(
         SDL_Window* window,
         glm::uvec2 window_extent
-    ) 
-    -> void;
+    ) -> void;
 
     auto cleanup() -> void;
     auto cleanup_imgui() -> void;
 
     auto draw( Camera const& cam) -> void;
 
-    auto present_image(u32 imageIndex, vk::Result acquire_res) 
-    -> void;
+    auto present_image(
+        u32 imageIndex,
+        vk::Result acquire_res
+    ) -> void;
 
     
 
-    auto handle_window_resize(glm::vec2 new_logical_extent) 
-    -> void;
+    auto handle_window_resize(glm::vec2 new_logical_extent) -> void;
         
-    auto 
-    copy_buffer(
+    auto copy_buffer(
         vk::Buffer const & src,
         vk::Buffer const& dst,
         vk::DeviceSize size,
         vk::DeviceSize offset=0
     ) const -> void;
   private:
-//    auto prepare_pass(
-//        vk::raii::CommandBuffer const& cmdBuf,
-//        Pipeline const& pipeline, 
-//        u32 frameIndex
-//    ) -> void;
 
     auto recreate_swapchain() -> void;
 
@@ -169,9 +182,6 @@ struct Renderer {
     auto init_imgui() -> void;
     auto record_imgui_commands(vk::raii::CommandBuffer const& cmdBuf) -> void;
 
-    auto init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) -> void;
-    auto init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) -> void;
-    auto init_2d_pipeline  (detail::helpers::ShaderModuleWrapper const& shader) -> void;
 
 
     // invokes record_fn(cmdBuf) on a temporary command buf, created and destroyed automatically.
@@ -185,19 +195,16 @@ struct Renderer {
     ) -> void;
 
     // drawing shit
-    auto 
-    update_ubo(
+    auto update_ubo(
         FrameData const& frame,
         Camera const& cam
     ) -> void;
 
 
-    auto
-    begin_single_use_cmd() 
+    auto begin_single_use_cmd() 
     const -> vk::raii::CommandBuffer;
 
-    auto 
-    end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) 
+    auto end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) 
     const -> void;
 
     auto get_viewport() const
@@ -206,7 +213,11 @@ struct Renderer {
     auto get_scissor() const
     -> vk::Rect2D;
 
-private:
+    static constexpr f32 k_depthMin {0.0f};
+    static constexpr f32 k_depthMax {1.0f};
+    static constexpr f32 k_depthFar {0.0f};
+    static constexpr f32 k_depthNear{1.0f};
+    f32 m_pixelSize;
     auto make_texture_2d(
         ImageData const& img_data,
         vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal
@@ -214,8 +225,8 @@ private:
         auto res = Texture2D{};
         res.layout = layout;
         res.textureImage = upload_texture_image(img_data);
-        res.image_view = Texture2D::make_view(res.textureImage, img_data.meta.vk_format, m_vkDevice);
-        res.sampler = Texture2D::make_sampler(m_vkDevice,m_vkPhysicalDevice);
+        res.image_view = Texture2D::make_view(res.textureImage, img_data.meta.vk_format, m_gpuContext.device);
+        res.sampler = Texture2D::make_sampler(m_gpuContext.device,m_gpuContext.physicalDevice);
         res.descriptor_image_info = Texture2D::make_descriptor_image_info(res.sampler,res.image_view, res.layout);
         return res;
     }
@@ -355,7 +366,7 @@ private:
             };
         }
         auto const atlas_width_px = i32{2048};
-        auto const max_tex_height_px = cast<i32>(m_vkPhysicalDevice.getProperties().limits.maxImageDimension2D);
+        auto const max_tex_height_px = cast<i32>(m_gpuContext.physicalDevice.getProperties().limits.maxImageDimension2D);
         auto packing_rects = std::vector<stbrp_rect>(FontAtlas::code_point_count * FontAtlas::atlas_size_count);
 
         auto spc = stbtt_pack_context{};
@@ -450,15 +461,8 @@ private:
         };
     }
 
-    static constexpr f32 k_depthMin {0.0f};
-    static constexpr f32 k_depthMax {1.0f};
-    static constexpr f32 k_depthFar {0.0f};
-    static constexpr f32 k_depthNear{1.0f};
 
-    f32 m_pixelSize;
-    void cleanup_vma() const noexcept;
-    glm::vec2 logical_to_ndc(glm::vec2 pLogical) const{ return detail::logical_to_ndc(pLogical, m_windowLogicalExtent);}
-    glm::vec2 ndc_to_logical(glm::vec2 pNdc) const{ return detail::ndc_to_logical(pNdc, m_windowLogicalExtent);}
+    glm::vec2 ndc_to_logical(glm::vec2 pNdc) const{ return detail::ndc_to_logical(pNdc, m_rendContext.windowLogicalExtent);}
     glm::vec2 logical_to_pixel(glm::vec2 pLogical) const{ return detail::logical_to_pixel(pLogical,m_pixelSize);}
     glm::vec2 pixel_to_logical(glm::vec2 pPixel) const{ return detail::pixel_to_logical(pPixel,m_pixelSize);}
 };

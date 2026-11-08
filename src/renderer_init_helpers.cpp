@@ -1,14 +1,12 @@
 #include "renderer.hpp"
-auto 
-Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf)
-const -> void
+auto Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) const -> void
 {
     cmdBuf.end();
-    m_vkQueue.submit(
+    m_gpuContext.queue.submit(
         vk::SubmitInfo{}
             .setCommandBuffers(*cmdBuf)
     );
-    m_vkQueue.waitIdle();
+    m_gpuContext.queue.waitIdle();
 }
 
 auto 
@@ -16,7 +14,7 @@ Renderer::begin_single_use_cmd()
 const -> vk::raii::CommandBuffer
 {
     auto cmdBuf =  std::move(vk::raii::CommandBuffers(
-            m_vkDevice,
+            m_gpuContext.device,
             vk::CommandBufferAllocateInfo{}
                 .setCommandPool(get_current_frame().commandPool)
                 .setLevel(vk::CommandBufferLevel::ePrimary)

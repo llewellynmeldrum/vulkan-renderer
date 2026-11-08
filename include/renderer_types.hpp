@@ -63,6 +63,7 @@ struct Pipeline{
         );
         cmdBuf.setPolygonModeEXT(dynamic.poly_mode);
     }
+
     auto clear() -> void{
         layout.clear();
         vk_pipeline.clear();
@@ -87,8 +88,8 @@ struct RenderAttachmentContext{
 struct PipelineCreateInfo{
     static constexpr inline bool extra_check_on_pipeline = true;
 
-    std::string_view pipeline_name = "n/a";
-    std::string_view shader_module_name = "n/a";
+    std::string_view pipeline_name = "n/a"; // Only used for errors/debugging atm. 
+    std::string_view shader_module_name = "n/a"; // Only used for errors/debugging atm. 
     vk::raii::ShaderModule const& shader_module;
     vk::raii::Device const& device;
     std::string vertex_fn_name;

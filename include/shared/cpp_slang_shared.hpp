@@ -29,12 +29,15 @@ static CONSTEXPR_VAR f32 circle_edge_correction_scale = 1.2f;
 
 
 namespace PushConstants{
-    struct Transform2D{
-        DECL_ALIGNED(glm::vec2) scale;
-        DECL_ALIGNED(glm::vec2) translate;
-    };
-    struct ModelMatrix{
-        DECL_ALIGNED(glm::mat4) model;
-    };
-}
+
+struct Transform2D{
+    DECL_ALIGNED(glm::vec2) scale;
+    DECL_ALIGNED(glm::vec2) translate;
+};
+
+struct ModelMatrix{
+    DECL_ALIGNED(glm::mat4) model;
+};
+
+}// namespace PushConstants{
 

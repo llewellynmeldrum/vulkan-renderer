@@ -30,6 +30,7 @@ void Engine::toggle_ui_mode(){
     }
     platform.toggle_relative_cursor_mode();
 }
+
 void Engine::handle_input_actions(){
     auto rotate_speed = f32{1.0f};
     auto move_speed = f32{0.1f};
@@ -41,13 +42,18 @@ void Engine::handle_input_actions(){
         cam.handle_mouse_movement(input.mouse_pos_logical_movement() / 1000.0f);
     }
 
+    if (input.just_pressed(KeyCode::C) && input.modifier_enabled(KeyModBits::eCTRL)){
+        m_shouldQuit = true;
+        return;
+    }
+
     if (input.just_pressed(KeyCode::T)){
         rend.toggle_wireframe();
     }
     if (input.just_pressed(KeyCode::ESCAPE)){
         rend.toggle_wireframe();
     }
-    if (input.modifier_enabled(KeyModBits::LSHIFT)){
+    if (input.modifier_enabled(KeyModBits::eLSHIFT)){
         move_speed *= 1.5f;
     }
 
@@ -87,7 +93,7 @@ void Engine::report_unminimize_event(){
 }
 void Engine::report_resize_event(){
     m_windowResized = true;
-    rend.m_requiresSwapchainRecreation = true;
+    rend.m_rendContext.requiresSwapchainRecreation = true;
 }
 
 void Engine::handle_event_reporting(SDL_Event const& e){

@@ -13,7 +13,7 @@ void Renderer::init_imgui() {
     };
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    if(! ImGui_ImplSDL3_InitForVulkan(m_window)){
+    if(! ImGui_ImplSDL3_InitForVulkan(m_rendContext.window)){
         log_failure("ImGui_ImplSDL3_InitForVulkan failed.");
     }
 
@@ -24,16 +24,16 @@ void Renderer::init_imgui() {
     style.FontScaleDpi = k_guiMainScale;
 
 
-    auto const color_format = static_cast<VkFormat>(m_swapchain.imageFormat);
+    auto const color_format = static_cast<VkFormat>(m_gpuContext.swapchain.imageFormat);
     auto const depth_format = static_cast<VkFormat>(DepthAttachment::select_depth_format());
 
     auto info = ImGui_ImplVulkan_InitInfo{
         .ApiVersion = k_API_VER,
-        .Instance = get_c_handle(m_vkInstance),
-        .PhysicalDevice = get_c_handle(m_vkPhysicalDevice),
-        .Device = get_c_handle(m_vkDevice),
-        .QueueFamily = m_vkQueueFamily,
-        .Queue = get_c_handle(m_vkQueue),
+        .Instance = get_c_handle(m_gpuContext.instance),
+        .PhysicalDevice = get_c_handle(m_gpuContext.physicalDevice),
+        .Device = get_c_handle(m_gpuContext.device),
+        .QueueFamily = m_gpuContext.queueFamily,
+        .Queue = get_c_handle(m_gpuContext.queue),
         .DescriptorPoolSize = 64,
         .MinImageCount = k_syncFrameCount,
         .ImageCount = k_syncFrameCount,

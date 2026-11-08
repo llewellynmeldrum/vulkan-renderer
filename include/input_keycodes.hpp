@@ -10,31 +10,32 @@
 #include "assert_shorthands.hpp"
 
 enum struct KeyModBits : u32{
-    NONE   = 0x0000u,                           /**< no modifier is applicable. */
-    LSHIFT = 0x0001u,                           /**< the left Shift key is down. */
-    RSHIFT = 0x0002u,                           /**< the right Shift key is down. */
-    LEVEL5 = 0x0004u,                           /**< the Level 5 Shift key is down. */
-    LCTRL  = 0x0040u,                           /**< the left Ctrl (Control) key is down. */
-    RCTRL  = 0x0080u,                           /**< the right Ctrl (Control) key is down. */
-    LALT   = 0x0100u,                           /**< the left Alt key is down. */
-    RALT   = 0x0200u,                           /**< the right Alt key is down. */
-    LMETA   = 0x0400u,                          /**< the left GUI key (often the Windows key) is down. */
-    RMETA   = 0x0800u,                          /**< the right GUI key (often the Windows key) is down. */
-    NUM_LOCK    = 0x1000u,                      /**< the Num Lock key (may be located on an extended keypad) is down. */
-    CAPS_LOCK   = 0x2000u,                          /**< the Caps Lock key is down. */
-    MODE   = 0x4000u,                           /**< the !AltGr key is down. */
-    SCROLL_LOCK = 0x8000u,                          /**< the Scroll Lock key is down. */
+    eNONE        = 0x0000u,                           /**< no modifier is applicable. */
+    eLSHIFT      = 0x0001u,                           /**< the left Shift key is down. */
+    eRSHIFT      = 0x0002u,                           /**< the right Shift key is down. */
+    eLEVEL5      = 0x0004u,                           /**< the Level 5 Shift key is down. */
+    eLCTRL       = 0x0040u,                           /**< the left Ctrl (Control) key is down. */
+    eRCTRL       = 0x0080u,                           /**< the right Ctrl (Control) key is down. */
+    eLALT        = 0x0100u,                           /**< the left Alt key is down. */
+    eRALT        = 0x0200u,                           /**< the right Alt key is down. */
+    eLMETA       = 0x0400u,                          /**< the left GUI key (often the Windows key) is down. */
+    eRMETA       = 0x0800u,                          /**< the right GUI key (often the Windows key) is down. */
+    eNUM_LOCK    = 0x1000u,                      /**< the Num Lock key (may be located on an extended keypad) is down. */
+    eCAPS_LOCK   = 0x2000u,                          /**< the Caps Lock key is down. */
+    eMODE        = 0x4000u,                           /**< the !AltGr key is down. */
+    eSCROLL_LOCK = 0x8000u,                          /**< the Scroll Lock key is down. */
 
-    CTRL   = (KeyModBits::LCTRL  |  KeyModBits::RCTRL)  ,                           /**< Any Ctrl key is down. */
-    SHIFT  = (KeyModBits::LSHIFT |  KeyModBits::RSHIFT),                            /**< Any Shift key is down. */
-    ALT    = (KeyModBits::LALT   |  KeyModBits::RALT)    ,                          /**< Any Alt key is down. */
-    META   = (KeyModBits::LMETA   | KeyModBits::RMETA)    ,                           /**< Any GUI key is down. */
+    eCTRL        = (KeyModBits::eLCTRL  |  KeyModBits::eRCTRL)  ,                           /**< Any Ctrl key is down. */
+    eSHIFT       = (KeyModBits::eLSHIFT |  KeyModBits::eRSHIFT),                            /**< Any Shift key is down. */
+    eALT         = (KeyModBits::eLALT   |  KeyModBits::eRALT)    ,                          /**< Any Alt key is down. */
+    eMETA        = (KeyModBits::eLMETA  | KeyModBits::eRMETA)    ,                           /**< Any GUI key is down. */
 };
+constexpr bool has(u32 bits, auto e) { return (bits & std::to_underlying(e)) == std::to_underlying(e); };
+static_assert(has(static_cast<u32>(KeyModBits::eCTRL), KeyModBits::eLCTRL));
+static_assert(has(static_cast<u32>(KeyModBits::eCTRL), KeyModBits::eRCTRL));
+static_assert(!has(static_cast<u32>(KeyModBits::eLCTRL), KeyModBits::eCTRL));
 using KeyMod = Flags<KeyModBits>;
-template<>
-struct enum_bitwise_or_opt_in<KeyMod> {
-    static constexpr inline bool enabled = true;
-};
+ENABLE_ENUM_BITWISE(KeyModBits)
 
 
 

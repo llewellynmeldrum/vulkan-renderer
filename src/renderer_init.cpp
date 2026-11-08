@@ -34,9 +34,9 @@
 
 void Renderer::init(SDL_Window* window, glm::uvec2 window_extent) {
     m_pixelSize = SDL_GetWindowPixelDensity(window);
-    m_window = window;
-    m_windowLogicalExtent = {window_extent.x,window_extent.y};
-    m_windowPixelExtent = logical_to_pixel(m_windowLogicalExtent);
+    m_rendContext.window = window;
+    m_rendContext.windowLogicalExtent = {window_extent.x,window_extent.y};
+    m_rendContext.windowPixelExtent = logical_to_pixel(m_rendContext.windowLogicalExtent);
     LOG_INFO("INITIALIZING RENDERER ({})", static_cast<void*>(this));
 
     try{
@@ -51,43 +51,49 @@ void Renderer::init(SDL_Window* window, glm::uvec2 window_extent) {
 void Renderer::init_vulkan() {
     //clang-format off
     {
-        auto ctx = detail::make_vk_instance(k_useValidationLayers, m_vkContext, k_API_VER);
-        m_vkInstance = std::move(ctx.m_vkInstance);
-        m_vkDebugMessenger = std::move(ctx.m_vkDebugMessenger);
+        auto ctx = detail::make_vk_instance(k_useValidationLayers, m_gpuContext.context, k_API_VER);
+        m_gpuContext.instance = std::move(ctx.m_vkInstance);
+        m_gpuContext.debugMessenger = std::move(ctx.m_vkDebugMessenger);
     }
 
     {
-        m_vkSurface = detail::make_vk_surface(m_vkInstance, m_window);
+        m_gpuContext.surface = detail::make_vk_surface(m_gpuContext.instance, m_rendContext.window);
     }
 
     {
-        auto ctx = detail::make_vk_device_and_queue(m_vkInstance,m_vkSurface, k_API_VER);
-        m_vkPhysicalDevice = std::move(ctx.m_vkPhysicalDevice);
-        m_vkDevice         = std::move(ctx.m_vkDevice);
-        m_vkQueue          = std::move(ctx.m_vkQueue);
-        m_vkQueueFamily    = std::move(ctx.m_vkQueueFamily);
+        auto ctx = detail::make_vk_device_and_queue(m_gpuContext.instance,m_gpuContext.surface, k_API_VER);
+        m_gpuContext.physicalDevice = std::move(ctx.m_vkPhysicalDevice);
+        m_gpuContext.device         = std::move(ctx.m_vkDevice);
+        m_gpuContext.queue          = std::move(ctx.m_vkQueue);
+        m_gpuContext.queueFamily    = std::move(ctx.m_vkQueueFamily);
     }
 
     {
-        m_allocator = detail::make_vma_allocator(m_vkPhysicalDevice, m_vkDevice, m_vkInstance);
+        m_allocator = detail::make_vma_allocator(m_gpuContext.physicalDevice, m_gpuContext.device, m_gpuContext.instance);
+        LOG_DBG("Marker for line 73.");
     }
+    ASSERT(m_allocator.m_raw_handle != nullptr);
+
+    LOG_DBG(":{}",cast<void*>(m_allocator.m_raw_handle));
+    // TODO: In the middle of fixing a bug with the RaiiVmaAllocator class
+    // After, I plan to continue making the split between the two types
 
     {
         auto swap_settings = SwapchainSettings{
-            .physical_device = m_vkPhysicalDevice,
-            .device = m_vkDevice,
-            .surface = m_vkSurface,
+            .physical_device = m_gpuContext.physicalDevice,
+            .device = m_gpuContext.device,
+            .surface = m_gpuContext.surface,
             .extent_px = get_framebuffer_size(),
         };
-        m_swapchain = detail::make_swapchain(swap_settings);
+        m_gpuContext.swapchain = detail::make_swapchain(swap_settings);
     }
 
     {
-        m_inflightFrames = detail::make_inflight_frames(
-            m_vkDevice,
-            m_vkPhysicalDevice,
+        m_rendContext.inflightFrames = detail::make_inflight_frames(
+            m_gpuContext.device,
+            m_gpuContext.physicalDevice,
             k_syncFrameCount,
-            m_vkQueueFamily
+            m_gpuContext.queueFamily
         );
     }
 
@@ -103,20 +109,20 @@ void Renderer::init_vulkan() {
 
     {
         m_depthImage = DepthAttachment::make(
-            m_vkDevice,
+            m_gpuContext.device,
             m_allocator,
-            m_swapchain.extent
+            m_gpuContext.swapchain.extent
         );
     }
 
     {
-        m_vkDescriptorSetLayout = detail::make_descriptor_set_layout(m_vkDevice);
-        m_vkDescriptorPool = detail::make_descriptor_pool(m_vkDevice, k_syncFrameCount);
-        m_vkDescriptorSets = detail::make_descriptor_sets(
-            m_vkDevice,
-            m_vkDescriptorPool,
-            m_vkDescriptorSetLayout,
-            m_inflightFrames,
+        m_gpuContext.descriptorSetLayout = detail::make_descriptor_set_layout(m_gpuContext.device);
+        m_gpuContext.descriptorPool = detail::make_descriptor_pool(m_gpuContext.device, k_syncFrameCount);
+        m_gpuContext.descriptorSets = detail::make_descriptor_sets(
+            m_gpuContext.device,
+            m_gpuContext.descriptorPool,
+            m_gpuContext.descriptorSetLayout,
+            m_rendContext.inflightFrames,
             m_texture,
             m_rend2d.font_atlas.atlas_texture,
             k_syncFrameCount
@@ -126,7 +132,7 @@ void Renderer::init_vulkan() {
 
     {
         auto main_shaders_module = detail::helpers::make_shader_module(
-            m_vkDevice, 
+            m_gpuContext.device, 
             "./shaders/bin/main_shaders.spv",
             "main_shaders"
         );
@@ -135,11 +141,18 @@ void Renderer::init_vulkan() {
         init_line_pipeline(main_shaders_module);
 
         auto shaders2d_module = detail::helpers::make_shader_module(
-            m_vkDevice, 
+            m_gpuContext.device, 
             "./shaders/bin/shaders2d.spv",
             "shaders2d"
         );
         init_2d_pipeline(shaders2d_module);
+
+        auto voxel_dda_module = detail::helpers::make_shader_module(
+            m_gpuContext.device, 
+            "./shaders/bin/voxel_dda.spv",
+            "voxel_dda"
+        );
+        init_voxel_dda_pipeline(voxel_dda_module);
     }
 
     {
@@ -151,9 +164,6 @@ void Renderer::init_vulkan() {
 
 
 //void init_vma(
-void Renderer::cleanup_vma()const noexcept{
-    vmaDestroyAllocator(m_allocator);
-}
 
 
 
@@ -251,14 +261,14 @@ void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& sh
             .pipeline_name           = "main_line",
             .shader_module_name      = shader.module_name,
             .shader_module           = shader.module,
-            .device                  = m_vkDevice,
+            .device                  = m_gpuContext.device,
             .vertex_fn_name          = "vertWireframe",
             .frag_fn_name            = "fragWireframe",
             .enabled_dynamic_states  = vk_enabledDynamicState,
-            .descriptor_set_layout = m_vkDescriptorSetLayout,
+            .descriptor_set_layout   = m_gpuContext.descriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eLine,
             .cull_mode               = vk::CullModeFlagBits::eNone,
-            .color_image_format      = m_swapchain.imageFormat,
+            .color_image_format      = m_gpuContext.swapchain.imageFormat,
             .depth_image_format      = DepthAttachment::select_depth_format(),
 
             .depth_write             = false,
@@ -272,6 +282,36 @@ void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& sh
 
 }
 
+auto Renderer::init_voxel_dda_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
+-> void{
+    m_voxel_dda_pipeline = make_shader_pipeline<
+        Vertex2D, // vertex type 
+        PushConstants::Transform2D // push constant type
+    > (
+        PipelineCreateInfo {
+            .pipeline_name           = "voxel_dda",
+            .shader_module_name      = shader.module_name,
+            .shader_module           = shader.module,
+            .device                  = m_gpuContext.device,
+            .vertex_fn_name          = "vertMain",
+            .frag_fn_name            = "fragMain",
+            .enabled_dynamic_states  = vk_enabledDynamicState,
+            .descriptor_set_layout   = m_gpuContext.descriptorSetLayout,
+            .poly_mode               = vk::PolygonMode::eFill,
+            .cull_mode               = vk::CullModeFlagBits::eNone,
+            .color_image_format      = m_gpuContext.swapchain.imageFormat,
+            .depth_image_format      = DepthAttachment::select_depth_format(),
+
+            .depth_write             = false,
+            .depth_test              = true,
+            // Normally, this would be lessOrEqual, but we have a flipped Z.
+            .depth_compar            = vk::CompareOp::eGreaterOrEqual,
+            .blend                   = detail::helpers::alpha_blend(),
+            .depth_bias              = false,
+        }
+    );
+
+}
 auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
 -> void{
     m_2d_pipeline = make_shader_pipeline<
@@ -282,14 +322,14 @@ auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shad
             .pipeline_name           = "2d",
             .shader_module_name      = shader.module_name,
             .shader_module           = shader.module,
-            .device                  = m_vkDevice,
+            .device                  = m_gpuContext.device,
             .vertex_fn_name          = "vertMain",
             .frag_fn_name            = "fragMain",
             .enabled_dynamic_states  = vk_enabledDynamicState,
-            .descriptor_set_layout = m_vkDescriptorSetLayout,
+            .descriptor_set_layout = m_gpuContext.descriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eFill,
             .cull_mode               = vk::CullModeFlagBits::eNone,
-            .color_image_format      = m_swapchain.imageFormat,
+            .color_image_format      = m_gpuContext.swapchain.imageFormat,
             .depth_image_format      = DepthAttachment::select_depth_format(),
 
             .depth_write             = false,
@@ -309,14 +349,14 @@ void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& sh
             .pipeline_name           = "main_fill",
             .shader_module_name      = shader.module_name,
             .shader_module           = shader.module,
-            .device                  = m_vkDevice,
+            .device                  = m_gpuContext.device,
             .vertex_fn_name          = "vertMain",
             .frag_fn_name            = "fragMain",
             .enabled_dynamic_states  = vk_enabledDynamicState,
-            .descriptor_set_layout = m_vkDescriptorSetLayout,
+            .descriptor_set_layout = m_gpuContext.descriptorSetLayout,
             .poly_mode               = vk::PolygonMode::eFill,
             .cull_mode               = vk::CullModeFlagBits::eNone,
-            .color_image_format      = m_swapchain.imageFormat,
+            .color_image_format      = m_gpuContext.swapchain.imageFormat,
             .depth_image_format      = DepthAttachment::select_depth_format(),
 
             .depth_write             = true,
@@ -331,21 +371,21 @@ void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& sh
 
 void Renderer::init_sync_structures() {
     int frame_idx = 0;
-    for (auto& frame : m_inflightFrames) {
+    for (auto& frame : m_rendContext.inflightFrames) {
         // Fences are cpu<->gpu. 
         frame.fence = vk::raii::Fence{
-            m_vkDevice,
+            m_gpuContext.device,
             vk::FenceCreateInfo{
                 .flags = vk::FenceCreateFlagBits::eSignaled,
             },
         };
-        set_vk_dbg_name(m_vkDevice, frame.fence, std::format("(Frame {}) fence", frame_idx));
+        set_vk_dbg_name(m_gpuContext.device, frame.fence, std::format("(Frame {}) fence", frame_idx));
 
         frame.presentCompleteSemaphore = vk::raii::Semaphore{
-            m_vkDevice,
+            m_gpuContext.device,
             vk::SemaphoreCreateInfo{ }
         };
-        set_vk_dbg_name(m_vkDevice, frame.presentCompleteSemaphore, std::format("(Frame {}) present-complete sem", frame_idx));
+        set_vk_dbg_name(m_gpuContext.device, frame.presentCompleteSemaphore, std::format("(Frame {}) present-complete sem", frame_idx));
         frame_idx++;
     }
 }

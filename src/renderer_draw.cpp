@@ -23,7 +23,7 @@ auto Renderer::update_ubo(
     FrameData const& frame,
     Camera const& cam
 ) -> void {
-    auto aspect = m_swapchain.extent.width / static_cast<f32>( m_swapchain.extent.height);
+    auto aspect = m_gpuContext.swapchain.extent.width / static_cast<f32>( m_gpuContext.swapchain.extent.height);
     auto ubo = UBO{
         .view = cam.get_view_matrix(),
         .proj = cam.get_proj_matrix(aspect),
@@ -56,7 +56,7 @@ auto Renderer::prepare_render_attachments(
         std::array<f32, 4> clearColor
 )-> RenderAttachmentContext 
 {
-    auto const& swapImage =  m_swapchain.images.at(imageIndex);
+    auto const& swapImage =  m_gpuContext.swapchain.images.at(imageIndex);
     vk_util::transition_image_layout(
         cmdBuf, swapImage, 
         vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
@@ -91,7 +91,7 @@ auto Renderer::prepare_render_attachments(
     ;
 
     auto attachmentInfo = vk::RenderingAttachmentInfo {}
-        .setImageView(m_swapchain.imageViews.at(imageIndex))
+        .setImageView(m_gpuContext.swapchain.imageViews.at(imageIndex))
         .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setLoadOp(vk::AttachmentLoadOp::eClear)
         .setStoreOp(vk::AttachmentStoreOp::eStore)
@@ -141,25 +141,26 @@ auto Renderer::record_commands(
 ) -> void {
     auto const& cmdBuf = frame.commandBuffer;
     auto const frameIndex = get_current_frame_index();
-    auto const& swapchainImage = m_swapchain.images.at(imageIndex);
+    auto const& swapchainImage = m_gpuContext.swapchain.images.at(imageIndex);
 
     cmdBuf.reset();
     cmdBuf.begin({});
 
 
     std::array<float, 4> clearColor = {
-        std::abs(std::sin(m_frameCount / 120.0f)),
+        std::abs(std::sin(m_rendContext.frameCount/ 120.0f)),
+    
         0.0f,
-        std::abs(std::sin(m_frameCount / 120.0f)),
+        std::abs(std::sin(m_rendContext.frameCount/ 120.0f)),
         1.0f
     };
     set_dynamic_state(cmdBuf);
     auto renderAttachments = prepare_render_attachments(cmdBuf,imageIndex,clearColor);
-    cmdBuf.beginRendering(renderAttachments.get_info(m_swapchain));
+    cmdBuf.beginRendering(renderAttachments.get_info(m_gpuContext.swapchain));
 
 
     // Render 3d 
-    auto const& frame_descriptorSets = m_vkDescriptorSets[frameIndex];
+    auto const& frame_descriptorSets = m_gpuContext.descriptorSets[frameIndex];
     for (const auto& [id, gpu_mesh]: m_gpu_meshes3d){
         LOG_DBG("Drawing mesh id={}, vtx:{},idx:{}",id,gpu_mesh.m_vertex_count, gpu_mesh.m_index_count);
         auto model_matrix = m_model_matrices.at(id);
@@ -182,7 +183,7 @@ auto Renderer::record_commands(
         // To get -1,-1 TL and +1,+1 BR, and 0,0 center, we must :
         // 1. multiply logical_pos by 2, and divide that by window extent.
         //  -> this gives us 0,0 TL, 2,2 BR, 1,1 center.
-        .scale = glm::vec2( 2.0 ) / m_windowLogicalExtent,
+        .scale = glm::vec2( 2.0 ) / m_rendContext.windowLogicalExtent,
 
         // 2. subtract 1 from all of these points and you get -1,-1 TL, 1,1 BR, 0,0 center.
         .translate = glm::vec2(-1.0f)
@@ -211,16 +212,16 @@ auto Renderer::present_image(
     vk::Result acquire_res
 )
 -> void {
-    auto present_rv = m_vkQueue.presentKHR(
+    auto present_rv = m_gpuContext.queue.presentKHR(
         vk::PresentInfoKHR{}
-            .setWaitSemaphores(*m_swapchain.renderFinishedSemaphores[imageIndex])
-            .setSwapchains(*m_swapchain.descriptor)
+            .setWaitSemaphores(*m_gpuContext.swapchain.renderFinishedSemaphores[imageIndex])
+            .setSwapchains(*m_gpuContext.swapchain.descriptor)
             .setImageIndices(imageIndex)
     );
     if (   present_rv == vk::Result::eSuboptimalKHR 
         || present_rv == vk::Result::eErrorOutOfDateKHR
         || acquire_res == vk::Result::eSuboptimalKHR // since we ignore this in the previous check
-        || m_requiresSwapchainRecreation
+        || m_rendContext.requiresSwapchainRecreation
     ){
         recreate_swapchain();
     }else{
@@ -247,12 +248,12 @@ auto Renderer::draw(
     Camera const& cam
 ) -> void{
     auto const& frame = get_current_frame();
-    auto fenceRV = m_vkDevice.waitForFences(*frame.fence, vk::True, numeric_max<u64>);
+    auto fenceRV = m_gpuContext.device.waitForFences(*frame.fence, vk::True, numeric_max<u64>);
     if (fenceRV != vk::Result::eSuccess){
         LOG_FATAL("Failed to wait for fence");
     }
 
-    auto const acquired = acquireNextImage(m_swapchain, frame);
+    auto const acquired = acquireNextImage(m_gpuContext.swapchain, frame);
     if (acquired.res == vk::Result::eErrorOutOfDateKHR){
         recreate_swapchain();
         return;
@@ -260,15 +261,15 @@ auto Renderer::draw(
         ASSERT(acquired.res ==vk::Result::eSuccess || acquired.res==vk::Result::eSuboptimalKHR);
     }
     auto imageIndex = acquired.imageIndex;
-    m_vkDevice.resetFences(*frame.fence);
+    m_gpuContext.device.resetFences(*frame.fence);
 
 
     update_ubo(frame, cam);
     record_commands(cam,frame,imageIndex);
-    submit_commands(m_vkQueue, frame, *m_swapchain.renderFinishedSemaphores[imageIndex]);
+    submit_commands(m_gpuContext.queue, frame, *m_gpuContext.swapchain.renderFinishedSemaphores[imageIndex]);
 
     present_image(imageIndex, acquired.res);
-    m_frameCount++;
+    m_rendContext.frameCount++;
 }
 
 

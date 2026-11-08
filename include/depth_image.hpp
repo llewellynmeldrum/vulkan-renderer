@@ -1,4 +1,5 @@
 #pragma once
+#include "vma_raii.hpp"
 #ifndef __cplusplus
 	#error "This header is intended for c++ only."
 #endif // __cplusplus
@@ -10,7 +11,7 @@ struct DepthAttachment{
     vk::raii::ImageView img_view{nullptr};
     static DepthAttachment make(
         vk::raii::Device const& m_vkDevice,
-        VmaAllocator const m_allocator,
+        VmaAllocator const  m_allocator,
         vk::Extent2D swap_extent
     ){
         auto res = DepthAttachment{};
