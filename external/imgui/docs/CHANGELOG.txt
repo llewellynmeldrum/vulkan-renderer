@@ -36,38 +36,464 @@ HOW TO UPDATE?
 - Please report any issue!
 
 -----------------------------------------------------------------------
- VERSION 1.93.0 WIP (In Progress)
+ VERSION 1.93.1 WIP (In Progress)
 -----------------------------------------------------------------------
 
 Breaking Changes:
 
-- Style: obsoleted `style.CurveTessellationTol (default 1.25)` which was in Pixels² unit in
-  favor of `style.CurveTesselationMaxError` (default 1.12)` which is in Pixels unit. It is
+Autumn cleanup of stuff marked obsolete more than two years ago:
+
+- Commented out legacy names/functions which were obsoleted in 1.90.7 (May 2024);
+  - `ImGuiMod_Shortcut`                    --> `ImGuiMod_Ctrl` (since 1.90.7 it maps to Cmd on macOS)
+- Commented out legacy names/functions which were obsoleted in 1.90.9 (July 2024);
+  - `ImGuiCol_TabActive`                   --> `ImGuiCol_TabSelected`
+  - `ImGuiCol_TabUnfocused`                --> `ImGuiCol_TabDimmed`
+  - `ImGuiCol_TabUnfocusedActive`          --> `ImGuiCol_TabDimmedSelected`
+- Commented out legacy names/functions which were obsoleted in 1.91.0 (July 2024);
+  - `ImGuiSelectableFlags_DontClosePopups` --> `ImGuiSelectableFlags_NoAutoClosePopups`
+  - `PushButtonRepeat(bool repeat)`        --> `PushItemFlag(ImGuiItemFlags_ButtonRepeat, repeat)`
+  - `PopButtonRepeat()`                    --> `PopItemFlag()`
+  - `PushTabStop(bool tab_stop)`           --> `PushItemFlag(ImGuiItemFlags_NoTabStop, !tab_stop);`
+  - `PopTabStop()`                         --> `PopItemFlag()`
+- Commented out legacy names/functions which were obsoleted in 1.91.1 (Sept 2024);
+  - `io.GetClipboardTextFn`                --> `platform_io.Platform_GetClipboardTextFn`
+  - `io.SetClipboardTextFn`                --> `platform_io.Platform_SetClipboardTextFn`
+  - `io.ClipboardUserData`                 --> `platform_io.Platform_ClipboardUserData`
+- Please also try to get rid of calls to `GetContentRegionMax()`, `GetWindowContentRegionMin()`
+  and `GetWindowContentRegionMax()` will may be removed soon-ish: you should not
+  ever need those functions. See #7838.
+
+
+Other Changes:
+
+- ImVec2: added a check for cases where a custom `IM_VEC2_CLASS_EXTRA` macro
+  adds an extra `operator=` to ImVec2. This isn't supported but should not
+  be needed as you should have a constructor to convert from your type to ImVec2.
+
+
+-----------------------------------------------------------------------
+ VERSION 1.93.0 (Released 2026-10-14)
+-----------------------------------------------------------------------
+
+Decorated log and release notes: https://github.com/ocornut/imgui/releases/tag/v1.93.0
+
+In 1.93.0, the `ImDrawList` rendering API has been improved to be more robust and
+more consistent over the whole range of shapes. The rendering now matches much closer
+to common vector drawing APIs, like html canvas. Improvements, like anti-aliased line
+endings and stroke position were added. The coordinates passed to the API are now
+consistently describing shape outlines.
+
+For code using custom rendering: some details are now rendered slightly differently
+(even if generally more consistent). The difference in rendering is in the range of
+half a pixel, but that can lead to issues like some lines now look blurrier or more
+transparent. All Dear ImGui widgets should appear identical or better.
+
+The rendering of common shapes was optimized when the shapes fall on integer coordinates
+(which is most of the UI). This includes skipping anti-aliasing when not needed, or
+using textures instead of tessellated geometry to draw round corners.
+The varying code-paths are designed to look indistinguishable from each others.
+
+New rendering code fixes some inconsistencies between graphics APIs
+(e.g. DirectX vs OpenGL) which are using different diamond exits rules.
+New code should work precisely the same regardless of which graphics API is used
+(note that using _StrokeLegacy mode can lead to the same old inconsistencies).
+
+New rendering code also deals better with animating thickness and rounding
+(integer values are recommended).
+
+While the current version doesn't make lots of visible use of the new features and
+facilities, they are among the pillars that will make it easier to create prettier
+contents, both for custom rendering and future versions of the library.
+
+Use `ImDrawFlags_StrokeLegacy` mode to emulate old rendering:
+- Per-primitive:      draw_list->AddLine(..., ..., ImDrawFlags_StrokeLegacy);
+- For a given scope:  draw_list->PushDrawFlag(ImDrawFlags_StrokeLegacy, true); draw_list->AddLine(...); draw_list->PopDrawFlag();
+- Globally:           ImGui::Checkbox("DefaultsToStrokeLegacy", &io.ConfigDebugDrawListDefaultsToStrokeLegacy);  // Map to a checkbox
+- Globally:           io.ConfigDebugDrawListDefaultsToStrokeLegacy = io.KeyShift;                                // Map on Shift
+
+Don't panic!
+Many applications will not notice any difference! You will more likely see
+differences if you used lots of direct `ImDrawList` calls for custom rendering.
+
+Credits for ImDrawList changes in 1.93.0:
+- main work courtesy of @memononen.
+- additional work/reviewing/guidance by @ocornut.
+- with legacy bits from @thedmd, @potocpav.
+Other credits marked below, or @ocornut when omitted.
+
+Refer to our guides:
+- ImDrawList Vector Rendering Reference
+    https://github.com/ocornut/imgui/wiki/Draw-List
+    (includes a precise list of differences between 1.92.9 and 1.93.0).
+- ImDrawList 1.92.9 vs 1.93.0 Interactive Testbed
+    https://www.dearimgui.com/docs/drawlist_v193
+    (interactively compare differences between 1.92.9 and 1.93.0 + commentary)
+    (downloadable HTML file, may be used offline)
+- Pixel Perfect Anti-aliased Rendering
+    https://github.com/ocornut/imgui/wiki/Pixel-Perfect-Rendering
+- How Anti-aliased Polyline Rendering is Implemented
+    https://github.com/ocornut/imgui/wiki/Polyline-Rendering
+- Discussion topic:
+    https://github.com/ocornut/imgui/issues/9504
+    (if you have a problem to discuss, please open a new issue)
+
+Breaking Changes:
+
+- ImDrawList:
+  - AddLine(): removed the (+0.5f,+0.5f) offset that was sneakily added to input coordinates. (#9504)
+    - This fixes inconsistencies in the API and matches the PathXXX API.
+    - By default, stroke thickness extends on both side of the given segment.
+      e.g for a "pixel-perfect" looking line with thickness=1.0f, coords should be passed as center of each ends of the line.
+    - Use `ImDrawFlags_StrokeLegacy` to use old offset if required. Or you can apply the offset manually!
+    - Generally better, simple and faster to use `AddLineH()`, `AddLineV()` functions added in 1.92.8.
+    READ IF YOU ARE MINDFUL OF PIXEL-PERFECTNESS IN YOUR CUSTOM RENDERING/WIDGETS:
+    - TRANSITION GUIDE FOR AXIS-ALIGNED LINES:
+      - When switching from legacy `AddLine()` values to `AddLineV()`, `AddLineH()` you can keep same inputs coordinates as before:
+        - Old `AddLine({x, y1}, {x, y2}, col)` --> `AddLineV(x, y1, y2, col);` // Vertical line.
+        - Old `AddLine({x1, y}, {x2, y}, col)` --> `AddLineH(x1, x2, y, col);` // Horizontal line.
+        - This will be equivalent and faster for thickness=1.0f lines.
+      - Since `AddLine()` use default stroke pos Center and `AddLineV()`, `AddLineH()` use Inside, thickness>1.0f strokes will differ.
+        Using `ImDrawFlags_StrokeCenter` will match old result more closely (aka look centered),
+        but is more likely to look blurry as it already did before.
+      - Read table below about StrokePos and the "Pixel-Perfect Rendering" guide if you care about pixel-perfect lines.
+    - TRANSITION GUIDE FOR DIAGONAL LINES:
+      - Your lines will appear offset by -0.5f pixels on each axis.
+        Being anti-aliased diagonal lines, they won't look particularly better or worse, just slightly offset.
+        It'll likely only be noticeable if you carefully combined them with other primitives for a pixel-perfect result.
+      - Old `AddLine({x1, y1}, {x2, y2}, col)` --> `AddLine({x1 + 0.5f, y1 + 0.5f}, {x2+ 0.5f, y2 + 0.5f}, col);`           // Same
+        or use `ImDrawFlags_StrokeLegacy`      --> `AddLine({x1, y1}, {x2, y2}, col, thickness, ImDrawFlags_StrokeLegacy);` // Offset by +0.5f + disable AA ends.
+        This reapplies the old offset, and should get you exactly the same result you previously
+        got for thickness=1.0f lines. But said result were previously sometimes ambiguous and
+        renderer-dependent. (#3116, #3258, #2441)
+      - Old code did not support anti-aliased ends, which could create gaps when rendering shapes out
+        of multiple contiguous lines instead of using `AddPolyline()`. There is a possibility that you
+        legacy code added fudge offsets here and there; which may not be necessary anymore if you use
+        `_AALineEnds`, or if you combine rendering of contiguous lines using `AddPolyline()`.
+  - AddRect(), AddCircle(), AddNgon(), AddEllipse(), AddTriangle(), AddQuad(): defaulting to "inside" stroke.
+    - All closed shapes with thickness=1.0f will appear identical.
+    - The difference for thickness>1.0f shapes may be minimal since very large strokes
+      were not well supported for widgets, but stroke will default inside widgets.
+  - AddCircle(), AddNgon(): removed -0.5f offset added to radius.
+    - This fixes inconsistencies in the API.
+    - Use `ImDrawFlags_StrokeLegacy` to use old method if required. Or you can apply the offset manually!
+  - AddRectFilled(): non-integer coordinates will now display anti-aliased edges.
+    Previously, non-integer coordinates rendered with aliased edges snapped by the
+    rasterizer. (#6971)
+  - AddRect(), AddRectFilled(): rectangles with inverted coordinates won't be visible
+    unless using `ImDrawFlags_StrokeLegacy` mode. With inverted coordinates (min > max):
+      - Legacy `AddRect()` rounding off       -> visible but incorrect outer size.
+      - Legacy `AddRect()` rounding on        -> visible but very glitchy.
+      - Legacy `AddRectFilled()` rounding off -> visible and correct.
+      - Legacy `AddRectFilled()` rounding on  -> visible but very glitchy.
+      - Use `ImDrawFlags_StrokeLegacy` to use old rendering for cases without rounding, or fix coordinates.
+  - Merged `ImDrawListFlags` into `ImDrawFlags`. `ImDrawListFlags` was rarely used directly
+    and generally setup by the ImGui context. 
+      - `ImDrawListFlags_AntiAliasedLines`    -> `ImDrawFlags_AALines`
+      - `ImDrawListFlags_AntiAliasedFill`     -> `ImDrawFlags_AAFill`
+      - `ImDrawListFlags_AllowVtxOffset`      -> `ImDrawFlags_UseVtxOffset`
+      - `ImDrawListFlags_TextNoPixelSnap`     -> `ImDrawFlags_TextNoPixelSnap`
+    Unifying them allows easily using them for both per-primitives and scope alterations.
+    Kept redirection enums (will obsolete).
+  - Renamed all `ImDrawFlags_RoundCornersXXX` flags to `ImDrawFlags_RoundXXX`.
+      - `ImDrawFlags_RoundCornersAll`         -> `ImDrawFlags_RoundAll`
+      - `ImDrawFlags_RoundCornersNone`        -> `ImDrawFlags_RoundNone`
+      - `ImDrawFlags_RoundCornersTopLeft`     -> `ImDrawFlags_RoundTopLeft`
+      - `ImDrawFlags_RoundCornersTopRight`    -> `ImDrawFlags_RoundTopRight`
+      - `ImDrawFlags_RoundCornersBottomLeft`  -> `ImDrawFlags_RoundBottomLeft`
+      - `ImDrawFlags_RoundCornersBottomRight` -> `ImDrawFlags_RoundBottomRight`
+      - `ImDrawFlags_RoundCornersTop`         -> `ImDrawFlags_RoundTop`
+      - `ImDrawFlags_RoundCornersBottom`      -> `ImDrawFlags_RoundBottom`
+      - `ImDrawFlags_RoundCornersLeft`        -> `ImDrawFlags_RoundLeft`
+      - `ImDrawFlags_RoundCornersRight`       -> `ImDrawFlags_RoundRight`
+    Kept redirection enums (will obsolete).
+  - Marked `ImDrawListFlags_AntiAliasedLinesUseTex` and `style.AntiAliasedLinesUseTex` as
+    obsolete, as the new line rendering code always uses textures.
+  - Enabling `ImFontAtlasFlags_NoBakedLines` in the font atlas will now disable support for
+    anti-aliased lines by clearing `style.AntiAliasedLines`/`style.AntiAliasedLineEnds`.
+- Style: obsoleted `style.CurveTessellationTol` (default 1.25) which was in Pixels² unit in
+  favor of `style.CurveTessellationMaxError` (default 1.12) which is in Pixels unit. It is
   easier to tweak + this allows us to easily scale error threshold on high density screens.
-  - style.CurveTesselationMaxError == sqrf(style.CurveTessellationTol).
+  - style.CurveTessellationMaxError == sqrtf(style.CurveTessellationTol).
+- ImGuiTextFilter: removed `float width` parameter of `Draw(const char* filter, float width)`:
+  prefer using `SetNextItemWidth(float)` which is standard. Kept inline redirection function.
+- Fonts: renamed `AddRemapChar()` to `AddRemapCodepoint()` (rarely used, marked internal).
+  (#609, #5748, #9559)
 - Backends:
   - DirectX12: Removed support for legacy `ImGui_ImplDX12_Init()` signature, which was
     obsoleted in 1.91.6 (December 2014), because it needed to forcefully disable support
     for `ImGuiBackendFlags_RendererHasTextures`. Use the new signature! (#9487)
+  - OpenGL3: Does not attempt to read `GL_CLIP_ORIGIN` by default as the detection is
+    sub-optimal and not reliable on some setup. Use `ImGui_ImplOpenGL3_SetClipOrigin(0)`
+    to enable auto-detection, or e.g. `ImGui_ImplOpenGL3_SetClipOrigin(GL_UPPER_LEFT)`.
 
 Other Changes:
 
+- Style:
+  - StyleColorsDark(): minor refresh of the default style to look more modern:
+    - Changed WindowBg to use a slightly greyer value and removed opacity.
+    - Changed FrameBg values to use a dark black to make frames stand out better.
+    - Tweak TextDisabled, TableHeaderBg, TableBorders to match altered WindowBg.
+  - StyleColorsLight(): inverted `ImGuiCol_TitleBgXXX` colors so that the selected
+    window title bar appears brighter.
+- ImDrawList:
+  - Added flags to specify stroke position in all `ImDrawList` stroking functions: (#9504) [@memononen]
+    - `ImDrawFlags_StrokeInside` (default for Rect, Circle/Ellipse, Triangle, Quad, Ngon + AddLineH, AddLineV)
+    - `ImDrawFlags_StrokeCenter` (default for Line, Polyline, Beziers, Paths function)
+    - `ImDrawFlags_StrokeCenterBiased` (center w/ bias for pixel perfect alignment)
+    - `ImDrawFlags_StrokeOutside`
+    - `ImDrawFlags_StrokeLegacy` (match old behavior)
+    - Legacy mode may be set as default for a given scope using `PushDrawFlag(ImDrawFlags_StrokeLegacy, true)`.
+    - Legacy code was generally applying +0.50f offsets which meant that,
+      - with thickness=1.0f: the stroke would appear inside.
+      - with thickness>1.0f: the stroke would start expanding on both sides but starting from that small initial offset.
+      - with thickness>1.0f for even integer values, the stroke would look blurry.
+      - TL;DR; the logic didn't make much sense for thickness>1.0f.
+    - Defaulting to Inside for closed shapes ensure that rectangles and lines are
+      never blurry, regardless of thickness, as long as input coordinates/sizes
+      are integers. (#9359) Recap:
+      ------------------------------------------------------------------------
+       Thickness   Legacy     Inside    Outside    Center   CenterBiased
+      ------------------------------------------------------------------------
+       1.0f        sharp      sharp     sharp      blurry   sharp
+       2.0f        blurry     sharp     sharp      sharp    sharp
+       3.0f        sharp      sharp     sharp      blurry   sharp
+      ------------------------------------------------------------------------
+    - Read our Wiki guides for more details!
+        https://github.com/ocornut/imgui/wiki/Draw-List
+    - And interactive 1.92.9 vs 1.93.0 comparing testbed:
+        https://www.dearimgui.com/docs/drawlist_v193
+  - AddPolyline(), PathStroke(), AddTriangle(): the algorithm to render lines got overhauled.
+    (#9504, #2183, #2964, #7972 + #9360, #6331, #4250, #4091) [@memononen]
+    - Generally fixed rendering of thick strokes/paths.
+    - The new stroke expansion now uses corner miter calculation, which keeps thickness along
+      the line segments consistent. If the corner becomes too sharp, it will be beveled to
+      avoid long spikes at corners.
+    - There are also some robustness measures for the case where the line thickness is larger
+      than the features being drawn.
+    - Rendering artifacts are still possible when the path features are smaller than line thickness,
+      but the artifacts should be more localized. The new implementation attempted to favor simple
+      implementation and robustness over the corner case accuracy.
+  - All functions: new rendering code fixes some inconsistencies between graphics APIs
+    (e.g. DirectX vs OpenGL) which are using different diamond exits rules. New code should
+    work precisely the same regardless of graphics API. (#3116, #3258, #2441) [@memononen]
+  - Debug: added `io.ConfigDebugDrawListDefaultsToStrokeLegacy` to facilitate comparing old/new
+    behaviors. This is equivalent to calling `PushDrawFlag(ImDrawFlags_StrokeLegacy, true)`
+    on every drawlists.
+    Suggested uses, e.g.
+      - `io.ConfigDebugDrawListDefaultsToStrokeLegacy = io.KeyShift; // Map on holding Shift`
+      - `ImGui::Checkbox("DefaultsToStrokeLegacy", &io.ConfigDebugDrawListDefaultsToStrokeLegacy);`
+  - Added `ImDrawFlags_AALineEnds` flag to enable anti-aliased line ends.
+    - Most noticeable for thick lines.
+    - Also helps fill minor gaps if combining multiple individual lines. For best looking
+      continuous lines you should use AddPolyline(), it creates joins between line segments
+      to avoid any gaps.
+    - Added `style.AntiAliasedLineEnds` in ImGui to set default state.
+    - This is disabled by default! Enabling AA Ends by default would be more "correct",
+      but since it is very slightly slower and increases vertex/index data we decided
+      to not enable it by default.
+      This keeps situations such as "throw tens of thousands of lines at ImDrawList"
+      optimal. You can opt-in for a given shape or in a scope using `PushDrawFlag()`.
+  - Added `ImDrawFlags_JoinMiter` flag to disable using beveled corner.
+    - Closer to legacy rendering and slightly faster, but corners sharper than
+      90 degrees may expand far out.
+    - Automatically used by AddRect(), AddCircle(), AddNgon(), AddEllipse() functions
+      since we know that the input path does not contain sharper corners.
+  - Added `ImDrawFlags_CapSquare` flag to extend lines ends using square caps. (#9360)
+  - AddConvexPolyFilled()/PathFillConvex(): improved to handle input geometry more robustly.
+    The rendering of sharp corners was improved. Earlier there were issues with sharp corners
+    either creating long spikes, or messing up the adjacent edge's anti-aliasing. Now the
+    anti-aliasing fringe calculation is more consistent, and sharp corners get beveled to
+    avoid spikes. There might still be issues when the smallest extent of a long thin polygon
+    is less than a pixel. Also supports `ImDrawFlags_JoinMiter`, to facilitate matching
+    a stroke using the same flag.
+  - `AddRect()`, `AddRectFilled()`: various optimizations for rounded rectangles. (#1962, #9504)
+    - Integer-aligned coordinates and thicknesses will automatically use baked textures,
+      saving on both CPU and vertex/index data.
+    - Enabled by default. Use `ImFontAtlasFlags_NoBakedRoundCorners` to disable baking
+      round corners in font atlas.
+    - Added `ImDrawFlags_UseTexForRoundCorners` flag to enable in scope or per-shape.
+      Added for consistency and debugging, not really needed in practice.
+  - `AddCircle()`, `AddCircleFilled()`: fixed large circles being under-tessellated
+    (when above ~140 with default CircleTessellationMaxError).
+  - Improved debug-build performance in various locations.
+  - Improved minor mismatches when overlapping strokes and filled shapes.
+    For example, when using inside strokes,
+    - `AddRect()` and `AddRectFilled()` with rounding now overlap better. (#3656)
+    - `AddCircle()` and `AddCircleFilled()` now overlap better.
+  - Added `ImDrawList::PushDrawFlag()`/`PopDrawFlag()` to alter certain flags for a
+    scope and a given `ImDrawList`. (#9489)
+    - e.g. `PushDrawFlag(ImDrawFlags_StrokeLegacy, true);` enforce legacy tweaks.
+  - About `ImDrawFlags_StrokeLegacy`:
+    - This is designed to emulate old behavior:
+      - Most shapes use `ImDrawFlags_StrokeCenter`.
+      - AddLine() add +0.5f,+0.5f offset to position.
+      - AddRect() and AddRectFilled() allow inverted positions.
+      - AddRectFilled() has no AA when passed non-integer coordinates.
+      - AddCircle(), AddNgon() add a -0.5f offset to radius.
+      - Closed shapes use miter corners.
+      - Lines don't have anti-aliased ends.
+    - But there are known difference between legacy code and ImDrawFlags_StrokeLegacy:
+      - Thick shapes with acute angles will now preserve thickness better,
+        which may make them appear as protruding a little more.
+  - About disabling anti-aliasing:
+    - Disabling anti-aliasing is now emulated by applying different UV coordinates.
+      - It does not result in a performance increase or vertex/index data decrease any more
+        (however the tendency is that the new code behaves better than old code).
+      - But may be a useful stylistic choice in some circumstances.
+    - Many thick shapes had broken corners with old no-AA code, and the old no-AA code
+      was wildly different from the AA code. Not the case any more. (#288)
+  - Per-viewport FramebufferScale for Apple/Retina screen is applied to draw lists:
+    - AA Fringe is scaled accordingly. (#9577)
+    - Circle and Curves tessellation error are scaled accordingly.
+  - Reworked assert in `PushTexture()` to allow convenience grace period of using a
+    texture that was queue for destroy during the frame. Make it safe to stick to
+    an existing texture during the frame. (#9528, #8465)
+  - Added optional `platform_io.DrawCallback_SetSamplerFromTex` standard backend-agnostic
+    draw callback for requesting to use the sampler associated already associated to a texture.
+    Currently only supported by the OpenGL2/3 and SDLRenderer3 backend. (#9378)
+  - Fixed dangling `ImDrawList::_OwnerName` when using animated label. (#9552) [@ubi-dcastonguay]
+- Mixed Values:
+  - Added `ImGuiItemFlags_MixedValue` flag for representing mixed/indeterminate values.
+    Supported by: Checkbox(), RadioButton(), DragXXX(), SliderXXX(), InputXXX(), ColorXXX()
+    and Combo() functions.
+    The scoped flag is designed for usage by advanced property editors. (#5518, #5677, #6865)
+- Drags, Sliders:
+  - Ongoing drags may be cancelled using Right-Click, Escape or Gamepad Triangle.
+    Cancelling reverts to the initial value. (#8564, #9534)
+  - Fixed an overflow using `ImGuiSliderFlags_Logarithmic` with S32/S64 types which
+    leads to clamped interactions. (#9526, #3361, #1823, #1316, #642) [@lailoken]
+- TreeNode:
+  - Fixed issues/asserts with 32+ deep trees when using ImGuiTreeNodeFlags_DrawLinesXXX
+    features or other features requiring stack storage. (#9509) [@lasrod]
+- TabBar:
+  - Improved scroll target when clicking a Tab that is larger than the scrolling
+    section width.
+  - Using <> scrolling buttons while the selected Tab is at either end of the
+    section mid-section but not fully visible always makes it fully visible
+    (before eventually selecting a Tab in the leading/trailing section).
+- Tables:
+  - Fixed a bug restoring correct .ini columns order when table use is Sortable
+    but had no user changes. (regression from 1.92.9). (#9519, #9108)
+  - Fixed a bug tracking topology changes (insert new columns in the middle)
+    when the table is not _Reorderable: new columns would be ordered incorrectly.
+    (#9570, #9108, #9572) [@lailoken]
+- InputText:
+  - Fixed a crash in some cases when using Home key in a WordWrap+ReadOnly field. (#9561)
+- Selectable:
+  - Fixed `ImGuiSelectableFlags_SelectOnNav` triggering during NavInit.
 - Fonts:
   - Reworked `AddFontDefault()` to use `io.DisplayFrameBufferScale` as part of the heuristic
     to select `AddFontDefaultVector()` by default, effectively using ProggyForever instead of
     ProggyClean on most Apple/Retina setups by default.
-- ImDrawList:
-  - Per-viewport FramebufferScale for Apple/Retina screen is applied to draw lists:
-    - AA Fringe is scaled accordingly.
-    - Circle and Curves tessellation error are scaled accordingly.
+  - Added `ImFont::AddRemapCodepointToGlyphIndex()` allowing to access glyphs that are not
+    mapped to codepoints. (#9559, #5647, #609, #5748, #8466)
+  - imgui_freetype: Fixed blurriness  rendering `AddFontDefaultVector()`. Caused by a
+    non-pixel aligned offset caused by `ExtraSizeScale`. (#9348, #9233) [@redpartizan, @RDMCz]
+  - (Internal) ImFontLoader: reworked `FontSrcContainsGlyph`, `FontBakedLoadGlyph` signatures
+    to take raw glyph index instead of codepoint. Added `FontSrcGetGlyphIndexFromCodepoint`.
+    (#9559, #5647, #9540, #8466, #8465)
+  - Added `IMGUI_DISABLE_STB_TRUETYPE` to completely omit the stb_truetype loader
+    code + stb_truetype.h code. (#9573)
+- ColorEdit:
+  - ColorButton, ColorEdit, ColorPicker: cancel-out alpha caused by `BeginDisabled()` so
+    disabled color buttons have the same color as non-disabled oness. (#9511)
+  - ColorButton: fixed issues/inconsistencies with checkerboard rendering when combining
+    color alpha and global style alpha. (#9511) [@enjmiah, @ocornut]
+- Popups:
+  - Amended context menu right-click opening code to check that the right-click
+    hasn't been owned by another items. This is more correct and also necessary
+    to avoid Drags/Sliders cancelling also triggering a cancel menu. (#8564, #9534)
+  - Reworked `GetMousePosOnOpeningCurrentPopup()` to be legal to call within the
+    BeginPopup/EndPopup scope of a popup which was just closed. (#9551) [@jkunstwald]
+- ImGuiTextFilter:
+  - Added support for space as an "and" filter, which is the standard. (#2435, #30)
+     e.g. w/ filter 'hello world' (without quotes) both words needs to be in input data.
+  - Added support for double-quoted "xxx" blocks to e.g. match words sequences. (#2435)
+     e.g. w/ filter "hello world" the exact sequence needs to be in input data.
+  - Fixed filtering when mixing "include" and "-exclude" keyword so that an "-exclude"
+    match always filters out. (#2435) [@kudaba, @ocornut]
+  - Added `DrawWithHint()` function. (#6206, #6395, #6447)
+  - Added a "incl -excl" hint by default when the search field is empty. (#6206, #6395, #6447)
+- Widgets:
+  - Checkbox, Menus: check marks use anti-aliased ends.
+  - Tweaked rendering in various locations to avoid blurriness:
+    - Windows: title-bar and menu-bar border (when thickness>1.0f).
+    - SeparatorText: border (when thickness>1.0f).
+    - Tree: hierarchy lines (when thickness>1.0f).
+    - InputText: input caret (when thickness>1.0f).
+    - TabBar: selected overline border (when thickness>1.0f).
+- Misc:
+  - Fixed `GetBackgroundDrawList()`/`GetForegroundDrawList()` not being properly reset
+    every frame when accumulated  session time is very large (e.g. a few days). [@lailoken]
+  - Added `IM_NODEBUGSTEP` helper to tag functions with `__declspec(non_user_code)` (MSVC)
+    or `[[gnu::artificial]]` (Clang/GCC) in order to provide a hint to debuggers to skip
+    trivial functions when stepping into.
+  - Tagged various trivial functions using `IM_NODEBUGSTEP`: `ImVec2()`, `ImVec4()` etc.
+    and various operators.
+  - Fixed strict aliasing violation in `ImHashData()` affecting Clang 23 + SSE 4.2 + -flto.
+    Could manifest as `ImFontAtlasBakedGetId()` computation omitting font size from
+    the hashed data. (#9557, #9560) [@sthalik]
+  - IO: restore default clipboard/ime/shell platform handlers on `ClearPlatformHandlers()`, fixing
+    issues switching backends mid-session to one relying on default. (#9537, #8945, #2769) [@lstalmir]
+- Demo:
+  - Added `Widgets->Mixed Values` section. (#5518, #5677, #6865)
+  - Custom Rendering section: exposed new flags; showcasing overlapping strokes
+    and filled shapes; added an option to animate thickness; added new shapes
+    to showcase new rendering features that previously hit limitations.
+  - Style Editor: fixed style/colors combo box applying style when opening Combo.
 - Backends:
   - QNX: added QNX Screen backend. (#9492) [@mgorchak-blackberry]
+  - Metal, Metal4: added support for rendering inside a render pass with multiple color
+    attachments (e.g. when merged with other passes): we render to the first color attachment
+    and leave the other ones untouched. (#9574) [@tqjxlm]
+  - OpenGL2, OpenGL3: added support for `platform_io.DrawCallback_SetSamplerFromTex` draw
+    callback to request using the sampler associated already associated to a texture. (#9378)
+  - OpenGL2, OpenGL3: fixed `DrawCallback_ResetRenderState` handler not resetting all states
+    in the glTexParameter() path. (#9378)
+  - OpenGL3: added `ImGui_ImplOpenGL3_SetClipOrigin()` to specify origin between
+    `GL_LOWER_LEFT` (new default), `GL_UPPER_LEFT` and `0` (autodetect, old default).
+  - OpenGL3: avoid querying `glGetIntegerv(GL_CLIP_ORIGIN)` multiple times when using
+    when using default and using `DrawCallback_ResetRenderState`, at it appear to stall
+    some drivers. (#2186, #3998, #3146, #3143, #8640)
   - SDL2: fixed querying framebuffer scale/density when using Metal without
     going through a SDL_Renderer. (#5592) [@lailoken]
+  - SDLRenderer3: restore any temporarily modified texture scale modes at the of `RenderDrawData()`. (#9378)
+  - SDLRenderer3: expose CurrentScaleMode in ImGui_ImplSDLRenderer3_RenderState. (#9543, #9378) [@Clownacy]
+  - SDLRenderer3: added support for `platform_io.DrawCallback_SetSamplerFromTex` draw callback to request
+    using the sampler associated already associated to a texture via `SDL_SetTextureScaleMode()`. (#9378)
+    It is equivalent to setting `render_state->CurrentScaleMode = SDL_SCALEMODE_INVALID`.
+    Note: this  callback is only supported by selected rendering backends: most other graphics API
+    don't have the equivalent of `SDL_SetTextureScaleMode()` and the callback won't work with them.
+  - Vulkan: added for support for multiple Vulkan contexts with custom loaders. (#6616) [@lstalmir]
+  - Vulkan: added support for rendering inside a render pass with multiple color attachments
+    (e.g. when merged with other passes): we render to the first color attachment and leave the
+    other ones untouched. (#9574) [@tqjxlm]
+  - WebGPU: fixed passing non-integer sizes to `wgpuRenderPassEncoderSetViewport()`
+    when `FramebufferScale` is >1.0f. (#9515, #8628) [@WayU]
+  - WebGPU: update to build with wgpu-native 29.0+. (#9377, #9532, #9530) [@lucascompython, @ivan-enzhaev]
 - Examples:
-  - SDL2+Metal: create Metal context without using a SDL_Renderer.
+  - All: all examples now default to use a little bit of rounding (`FrameRounding` and `GrabRounding`).
+  - MSVC: disabled /JMC in Visual Studio projects (unnecessary overhead).
+  - GLFW/SDL2/SDL3+WebGPU: fixed running with wgpu-native missing `wgpuInstanceWaitAny()`. (#9377)
+  - GLFW/SDL2/SDL3+WebGPU: better select surface format. (#9576) [@ypujante]
+  - GLFW+Metal: fixed mistakenly calling `ImGui_ImplGlfw_InitForOpenGL()`, which
+    broke multi-viewport support. (#9564) [@ypujante]
+  - SDL2+Metal: create Metal context without using a `SDL_Renderer`.
   - QNX+OpenGL3, QNX+Vulkan: added QNX Screen examples. (#9492) [@mgorchak-blackberry]
   - OSX+OpenGL3: added example_apple_opengl3/ (OSX/Cocoa + OpenGL 3.2 Core profile).
+
+Docking+Viewports Branch:
+
+- Style:
+  - Changed `ImGuiCol_DockingEmptyBg` value in dark/light styles.
+- Backends:
+  - DX10, DX11, DX12: fixed crash when CreateSwapChain() or CreateRenderTargetView()
+    calls are failing. (#9546) [@lailoken]
+  - GLFW: fixed applying mouse cursor shapes to secondary viewports, broken in 1.92.6
+    when introducing a cache. (#9545) [@JamesWrigley]
+  - Metal: fixed resizing windows losing framebuffer scale. (#6828, #8856) [@laikoken]
+- Examples:
+  - SDL3+Metal, GLFW+Metal: fix multi-viewport support.
 
 
 -----------------------------------------------------------------------
@@ -293,6 +719,20 @@ Other Changes:
     with non-fractional framebuffer size on Wayland. (#8761, #9124) [@billtran1632001]
   - SDL3+Metal4: added new example. (#9458, #9451) [@AmelieHeinrich]
 
+Docking+Viewports Branch:
+
+- Viewports:
+  - Fixed an issue where the implicit "Debug" window while hidden would erroneously
+    interfere with merging secondary viewports into the main viewport.
+- Docking:
+  - Fixed behavior change/regression in 1.92.8 where a window using the
+    ImGuiWindowFlags_AlwaysAutoResize flag would have ItemWidth default
+    change when docked. (#9355, #9443) [@reybits]
+- Backends:
+  - Metal4: added multi-viewport support. (#9465, #9451) [@hoffstadt]
+  - Vulkan: fixed use after-free when using multi-viewports with dynamic rendering.
+    (#9390, #9468) [@vikhik, @Turtle-PB]
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.8 (Released 2026-05-12)
@@ -499,6 +939,14 @@ Other Changes:
     - `IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE` descriptors of type `VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE`.
     - `IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE`       descriptors of type `VK_DESCRIPTOR_TYPE_SAMPLER`.
 
+Docking+Viewports Branch:
+
+- Docking:
+  - Toggling tab bar visibility marks saved settings as dirty. (#9380)
+- Viewports:
+  - Added opaque `void* PlatformIconData` storage in viewport and `ImGuiWindowClass`
+    to allow passing icon information to a custom backend or hook. (#2715)
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.7 (Released 2026-04-02)
@@ -568,7 +1016,7 @@ Other Changes:
               part of the scroll freeze. So if you intentionally hide columns <N, the scroll
               freeze area would start covering the subsequent/following columns (N+1) etc.
     - After:  `TableSetupScrollFreeze(N, 0)`: include the N left-most columns (regardless of visibility),
-              as part of the scroll freeze. So if you intentionally hide columns <N, the scroll
+              part of the scroll freeze. So if you intentionally hide columns <N, the scroll as
               freeze area will cover less columns.
     - This is generally more sane and logical.
   - Fixed dragging a header to reorder outside of visible bounds (due to horizontal scrolling)
@@ -663,6 +1111,23 @@ Other Changes:
   - SDL2+WebGPU: fixed hi-dpi handling. (#9300) [@ypujante]
   - GLFW/SDL2/SDL3+WebGPU: added support for WGVK. (#9316, #9246, #9257) [@r-lyeh, @ocornut]
   - GLFW/SDL2/SDL3+WebGPU: removed support for Emscripten <4.0.10. (#9281) [@ypujante]
+
+Docking+Viewports Branch:
+
+- Viewports:
+  - Fixed an issue where the implicit "Debug" window would erroneously be targetted for
+    mouse inputs while hidden if (1) the implicit "Debug" window was used in a previous
+    session and moved to a secondary viewport and (2) the Platform Backend does not
+    support the `ImGuiBackendFlags_HasMouseHoveredViewport` feature. (#9254)
+  - Backends: SDL2, SDL3: fixed an issue dated 2025/04/09 (1.92 WIP) where a refactor
+    and a merge caused `ImGuiBackendFlags_HasMouseHoveredViewport` to never be set, causing
+    foreign windows to be ignored when deciding of hovered viewport. (#9284) [@ravencgg]
+  - Backends: SDL3: use `SDL_HAS_EVENT_DISPLAY_USABLE_BOUNDS_CHANGED` (SDL 3.4.0+) when
+    available to avoid refreshing monitor work area every frame on Windows. (#8415)
+  - Backends: Win32: fixed setting/getting correct size when viewports have OS decorations
+    enabled (e.g. io.ConfigViewportsNoDecoration = false) and process is running in
+    Per-Monitor V2 DPI mode. May be related to incorrect mouse offset when using
+    decorated OS windows. (#8897) [@lailoken]
 
 
 -----------------------------------------------------------------------
@@ -906,6 +1371,37 @@ Other Changes:
    - Win32+DirectX12: ignore seemingly incorrect `D3D12_MESSAGE_ID_FENCE_ZERO_WAIT`
      warning on startups on some setups. (#9084, #9093) [@RT2Code, @LeoGautheron]
 
+Docking+Viewports Branch:
+
+- Docking:
+  - Fixed various rendering issues and ability to have rounded floating dock nodes.
+    (#6993, #6151) - please note that rounding is still disabled on standalone
+    viewports.
+  - Fixed implicit/fallback "Debug" window from staying visible if once docked. (#9151)
+  - Demo: rework 'Dockspace' demo to increase clarity and put more emphasis on the
+    basic path of simply calling `DockSpaceOverViewport()`.
+- Viewports:
+  - Fixed a regression in 1.92.4 where partially moving a floating docking node
+    with horizontal/vertical split over the main viewport would set the window in
+    an invalid state in some situations, making user unable to further interact
+    with the window.
+  - Fixed a regression in 1.92.4 which could cause combos/popups window from
+    appearing under their parent viewport if their geometry overlapped the main
+    viewport. (#8948, #9172, #9131, #9128)
+  - Fixed an assert in background dimming code, which could trigger after using
+    gamepad/keyboard to move a window to another viewport. (#9053) [@lut0pia, @ocornut]
+- Backends:
+  - GLFW: dynamically load X11 functions to avoid `-lx11` linking requirement introduced
+    in 1.92.3. (#9116, #9109) [@ramenguy99]
+  - GLFW: improve workarounds for cases where GLFW is unable to provide reliable monitor
+    info. Preserve existing monitor list when none of the new one is valid. (#9195, #7902, #5683)
+  - SDL2, SDL3: adjust IME offset to match other backends and master branch. (#6071, #1953)
+  - Win32: viewports created by backend forcefully direct messages to
+    `DefWindowProcW()` in order to support Unicode text input. (#9099, #3653, #5961) [@ulhc]
+  - Win32: fixed an issue from 1.90.5 where newly appearing windows that are not parented
+    to the main viewport didn't have their task bar icon appear before the window was
+    explicitly refocused. (#7354, #8669)
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.5 (Released 2025-11-20)
@@ -1051,6 +1547,22 @@ Other Changes:
   - SDL3+WebGPU: added new example (Emscripten + native Dawn/WGPU). (#8381) [@brutpitt]
   - Win32+OpenGL3: enable DPI awareness. (#9083)
 
+Docking+Viewports Branch:
+
+- Docking, Style: fixed per-window ImGuiCol_UnsavedMarker changes not being latched
+  by docked windows. (#8983, #9064)
+- Docking: fixed crash loading certain form of invalid .ini settings (e.g. nodes
+  referring to a missing parent, duplicate nodes id). (#9070)
+- Docking: added io.ConfigDockingNoDockingOver helper config flag to prevent
+  merging windows into a same tab-bar.
+- Examples:
+  - SDL2+DX11, SDL3+DX11, Win32+DX10, Win32+DX11: fixed one resource leak
+    from the use of MakeWindowAssociation() in 1.92.4. (#9010, #4350) [@o-3-o]
+- Backends:
+  - DirectX12: Fixed an issue in synchronization logic improving rendering
+    throughput for secondary viewports. (#9025, #8961)
+  - Vulkan: handle viewport surface creation failure without crashing. (#9068) [@zentia]
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.4 (Released 2025-10-14)
@@ -1060,6 +1572,10 @@ Decorated log and release notes: https://github.com/ocornut/imgui/releases/tag/v
 
 Breaking Changes:
 
+- Viewports: for consistency with other config flags, renamed
+     io.ConfigViewportPlatformFocusSetsImGuiFocus
+  to io.ConfigViewportsPlatformFocusSetsImGuiFocus. (#6299, #6462)
+  It was really a typo in the first place, and introduced in 1.92.2.
 - Backends:
   - TreeNode, Selectable, Clipper: commented out legacy names obsoleted in
     1.89.7 (July 2023) and 1.89.9 (Sept 2023):
@@ -1161,6 +1677,53 @@ Other Changes:
   - Win32+DirectX12: Rework synchronization logic. (#8961) [@RT2Code]
   - Made examples' main.cpp consistent with returning 1 on error.
 
+Docking+Viewports Branch:
+
+- Nav, Docking, Selection: Fixed tab change from reinitializing navigation state,
+  which would erroneously clear selection when using ImGuiSelectableFlags_SelectOnNav
+  or clear multi-selection when not using ImGuiMultiSelectFlags_NoAutoSelect. (#8997)
+- Nav: Fixed a crash that could occur when opening a popup following the processing
+  of a global shortcut while no windows were focused (the fix done in 1.92.3 was
+  incomplete for docking branch).
+- Viewports:
+  - Added ImGuiBackendFlags_HasParentViewport backend flag for
+    backend to specify if it can honor the `viewport->ParentViewport`/`ParentViewportId`
+    value by applying the corresponding parent/child relation at the Platform level. (#8948)
+    - SDL3, Win32 backends: supported.
+    - SDL2, GLFW, OSX backends: unsupported.
+  - Fixed a bug where ImGuiWindowFlags_NoBringToFrontOnFocus would effectively
+    be ignored when windows first appear and viewports are enabled. (#7008) [@jshofmann]
+  - Changed default value of io.ConfigViewportsNoDefaultParent to true. (#8948)
+    As a reminder, for backend honoring ParentViewportID:
+    - Parented windows will always appear in front of the main viewport.
+    - Non-parented windows can appear behing the main viewport.
+  - Fixed an issue inferring Z-order when attempting to merge a viewport
+    back in the the main/hosting viewport. (#8948)
+    Note that for GLFW/SDL2/OSX backends, which do not support honoring ParentViewportID.
+    Setting io.ConfigViewportsNoDefaultParent=true will align imgui's expectation
+    with what the backend does.
+  - Storing `ImGuiViewport* ParentViewport` pointer along with ParentViewportID.
+  - ImGui::DestroyContext() does not call DestroyPlatformWindows() anymore at it
+    is assumed to be unnecessary as backends should have done it and we check that
+    backends have been shutdown since 1.90.4. Changed into asserts. (#7175, #8945)
+- Backends:
+  - DirectX10, DirectX11, DirectX12: Disabled DXGI's Alt+Enter default behavior on
+    secondary viewports managed by the backend. (#4350) [@PathogenDavid]
+  - DirectX10, DirectX11: avoid ImGui_ImplXXXX_SwapBuffers() handlers for secondary
+    viewports crashing if SwapChain could not be created.
+  - Vulkan: Added a way to configure secondary viewport pipeline creation by
+    setting init_info.PipelineInfoForViewports fields. (#8946, #8110, #8111, #8686)
+  - Vulkan: Added a way to configure secondary viewport swapchain VkImageUsageFlags
+    to e.g. capture rendering. (#8946, #8940) [@olivier-gerard, @ocornut]
+    Usage example: `init_info.PipelineInfoForViewports.SwapChainImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;`
+  - Vulkan: pipeline created for secondary viewport automatically match
+    surface format. (#8686) [@sylmroz]
+  - Vulkan: Added ImGui_ImplVulkanH_GetWindowDataFromViewport() accessor/helper. (#8946, #8940) [@olivier-gerard]
+- Docs: improve docking API comments and demo. (#9000)
+- Examples: DX10, DX11: Disabled DXGI's Alt+Enter default behavior in examples.
+  Applications are free to leave this enabled, but it does not work properly with
+  multiple viewports. (#4350, #8979) [@PathogenDavid]
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.3 (Released 2025-09-17)
@@ -1255,6 +1818,22 @@ Other Changes:
 - Backends: Vulkan: added ImGui_ImplVulkan_CreateMainPipeline() to recreate pipeline
   without reinitializing backend. (#8110, #8111) [@SuperRonan]
 
+Docking+Viewports Branch:
+
+- DPI: fixed io.ConfigDpiScaleFonts from ever working since 1.92 (the irony
+  being that it is when it started to make sense!). As a reminder, the option
+  automatically copy the _current_ viewport DpiScale to style.FontScaleDpi.
+  This is why we separated the style.FontScaleMain and style.FontScaleDpi scaling
+  factor, as the later is meant to be overwritten. (#8832, #8465)
+- DPI: Fixed obsoleted ImGuiConfigFlags_DpiEnableScaleFonts/_DpiEnableScaleViewports
+  names from setting the equivalent io.ConfigDpiScaleFonts/io.ConfigDpiScaleViewports
+  flag correctly (regression in 1.92).
+- Docking, Style: added style.DockingNodeHasCloseButton option to hide the
+  Close Button attached to each docking node. (#8933)
+- Backends: GLFW: improve multi-viewport behavior in tiling WMs on X11.
+  Note: using GLFW backend on Linux/BSD etc. requires linking with `-lX11`.
+  (#8884, #8474, #8289, #2117) [@Ikos3k, @Madman10K]
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.2b (Released 2025-08-13)
@@ -1275,6 +1854,12 @@ Changes:
   change current ALLEGRO_DISPLAY, as Allegro applications often need to do that.
 - Backends: Allegro5: Fixed missing support for ImGuiKey_PrintScreen
   under Windows, as raw Allegro 5 does not receive it.
+
+Docking+Viewports Branch:
+
+- Fixed a bug where closing a viewport using OS facility (e.g. ALT+F4, Close Button)
+  would erroneously close all windows located in the viewport, even ones docked
+  into nested dockspaces. Only top-most windows should be closed. (#8887) [@lailoken]
 
 
 -----------------------------------------------------------------------
@@ -1363,6 +1948,19 @@ Other Changes:
 - Backends: Vulkan: Avoid calling vkCmdBindDescriptorSets() when texture
   has not changed. (#8666) [@micb25]
 
+Docking+Viewports Branch:
+
+- Windows, Viewport: fixed an issue where interrupting a viewport move with
+  e.g. a ClearActiveID() call would leave the dragged viewport with the
+  normally temporary ImGuiViewportFlags_NoInputs flag, preventing further
+  interactions with the viewport. (#5324) (thanks @mdelaharpe)
+- Viewports: added io.ConfigViewportPlatformFocusSetsImGuiFocus to opt-out
+  of focusing imgui windows When a platform window is focused (e.g. using Alt+Tab,
+  clicking Platform Title Bar). In principle this is better enabled but we
+  provide an opt-out because some Linux window managers tend to eagerly focus
+  windows (on e.g. mouse hover, or even on a simple window pos/size change).
+  (#6299, #6462)
+
 
 -----------------------------------------------------------------------
  VERSION 1.92.1 (Released 2025-07-09)
@@ -1411,6 +2009,10 @@ Changes:
   validation error on some setups. (#8743, #8744) [@tquante]
 - Backends: Vulkan: fixed texture synchronization issue introduced in 1.92.0,
   leading to validation layers reacting. (#8772) [@Majora320]
+
+Docking+Viewports Branch:
+
+- Backends: OSX: Fixed multi-viewport handling broken in 1.92.0. (#8644, #8777) [@cfillion]
 
 
 -----------------------------------------------------------------------
@@ -1639,6 +2241,9 @@ Breaking changes:
    - Imgui_ImplSDLGPU3_PrepareDrawData() --> ImGui_ImplSDLGPU3_PrepareDrawData()
 - Internals: RenderTextEllipsis() function removed the 'float clip_max_x' parameter directly
   preceding 'float ellipsis_max_x'. Values were identical for a vast majority of users. (#8387)
+- [Docking] renamed/moved ImGuiConfigFlags_DpiEnableScaleFonts     -> bool io.ConfigDpiScaleFonts.
+- [Docking] renamed/moved ImGuiConfigFlags_DpiEnableScaleViewports -> bool io.ConfigDpiScaleViewports.
+  **Neither of those flags are very useful in current code. They will be useful once we merge font changes.**
 
 Non-breaking Fonts/Textures related changes:
 
@@ -1670,7 +2275,7 @@ Non-breaking Fonts/Textures related changes:
 - Fonts: ImFontAtlas::AddFontXXX() can fail more gracefully if error handling is configured
   to not assert (this will be better exposed via future font flags).
 - Fonts: added style.FontScaleBase scaling factor (previously called io.FontGlobalScale).
-- Fonts: added style.FontScaleDpi scaling factor. This is designed to be be changed on
+- Fonts: added style.FontScaleDpi scaling factor. This is designed to be changed on
   per-monitor/per-viewport basis, which `io.ConfigDpiScaleFonts` does automatically.
   (which is why it is separate from FontScaleBase).
 - Fonts: added optional font_size parameter to ImGui::PushFont() function.
@@ -1872,6 +2477,35 @@ Other Changes:
   - Examples: DirectX12+Win32: also test for IsIconic() for sleeping since we don't seem to
     get a DXGI_STATUS_OCCLUDED signal when minimized. (#8603) [@dooann]
 
+Docking+Viewports Branch:
+
+- Viewports: added per-viewport FramebufferScale for Retina display multi-monitor support.
+  Backend must provide platform_io.platform_io.Platform_GetWindowFramebufferScale handler.
+  This effectively fixes clipping/rendering on multi-monitors with varying Retina scale.
+  (#1065, #1542, #1676, #1786, #2826, #3757, #5081, #5580, #5592, #6465, #7273, #7779 etc.)
+- Viewports: fixed handling of simultaneous move + resize (e.g. toggling maximized)
+  when ImGuiConfigFlags_DpiEnableScaleViewports is enabled.
+- Backends: Win32: Viewports: fixed an issue when closing a window from
+  the OS close button (with io.ConfigViewportsNoDecoration=false) while
+  user code is discarding the 'bool *p_open=false output' from Begin().
+  Because we allowed the Win32 window to close early, Windows destroyed
+  it and our imgui window became not visible even though user code was
+  still submitting it. (#8670)
+- Backends: Win32: Viewports: handle WM_DPICHANGED in backend when
+  ImGuiConfigFlags_DpiEnableScaleViewports is enabled.
+- Backends: GLFW, SDL2, SDL3, Apple: provide Platform_GetWindowFramebufferScale handler,
+  (#1065, #1542, #1676, #1786, #2826, #3757, #5081, #5580, #5592, #6465, #7273, #7779 etc.)
+- Backends: SDLGPU3 for SDL3: added multi-viewport support. (#8573) [@Lekoopapaul]
+- Backends: SDL2, SDL3: revert updating monitors and work areas info every
+  frame. Only do it on Windows to detect task-bar resize until we get an
+  adequate event for it. (#8415, #8558)
+- Backends: SDL3: macOS: Fixed secondary-viewports not appearing on a different
+  monitor than the main viewport. Because SDL_SetWindowParent() seems to restrict it.
+- Backends: GLFW: Disable multi-viewports under Wayland (require GLFW 3.4). (#8587)
+- Backends: GLFW: Fixed an issue where Win32 specific WndProc hook was not installed
+  for all GLFW version, preventing mouse vs touch detection from working on
+  secondary viewports.
+
 
 -----------------------------------------------------------------------
  VERSION 1.91.9b (Released 2025-03-17)
@@ -2004,6 +2638,8 @@ Other changes:
   with asserts enabled. (#8452)
 - Backends: SDL2, SDL3: Using SDL_OpenURL() in platform_io.Platform_OpenInShellFn
   handler. (#7660) [@achabense]
+- Backends: SDL2, SDL3: Use display bounds when SDL_GetDisplayUsableBounds()
+  fails or return a zero size. (#8415, #3457)
 - Backends: SDL2, SDL3, Win32, Allegro5: Added support for ImGuiMouseCursor_Wait
   and ImGuiMouseCursor_Progress cursors.
 - Backends: SDL2, SDL3: Avoid calling SDL_GetGlobalMouseState() when mouse is in
@@ -2025,6 +2661,22 @@ Other changes:
 - Backends: WebGPU: Fix for DAWN API change WGPUProgrammableStageDescriptor -> WGPUComputeState.
   [@PhantomCloak] (#8369)
 - Backends: WebGPU: Fix for webgpu-native API changes. (#8426) [@pplux]
+
+Docking+Viewports Branch:
+
+- Docking: Removed legacy assert preventing to call DockBuilderSplitNode() on an existing
+  split node. This makes using DockBuilder a little more flexible and bearable! (#8472) [@MegaMech]
+- Viewports: fixed an issue where in certain cases, a window repositioning leading
+  to a monitor change could have the window incorrectly get clamped within the boundaries
+  of its previous monitor. Would happen e.g. when loading .ini data during runtime. (#8484)
+- Viewports: fixed an assert when a window load settings with a position outside
+  monitor bounds, when there are multiple monitors. (#8393, #8385) [@gaborodriguez]
+- Viewports + Backends: Win32: Fixed setting title bar text when application
+  is compiled without UNICODE. (#7979, #5725) [@lailoken]
+- Backends: GLFW, SDL2/SDL3: Update monitors and work areas information every frame,
+  as the later may change regardless of monitor/display changes. (#8415)
+- Backends: Win32: WM_SETTINGCHANGE's SPI_SETWORKAREA message also triggers a refresh
+  of monitor list, as they contain work area information. (#8415) [@PathogenDavid, @lailoken]
 
 
 -----------------------------------------------------------------------
@@ -2088,7 +2740,7 @@ Other changes:
   one without the other is never correct. (#8174, #6556, #6336, #4723)
 - Examples: DirectX12: Reduced number of frame in flight from 3 to 2 in
   provided example, to reduce latency.
-- Examples: Vulkan: better handle VK_SUBOPTIMAL_KHR being returned by
+- Backends+Examples: Vulkan: better handle VK_SUBOPTIMAL_KHR being returned by
   vkAcquireNextImageKHR() or vkQueuePresentKHR(). (#7825, #7831) [@NostraMagister]
 - Backends: SDL2: removed assert preventing using ImGui_ImplSDL2_SetGamepadMode()
   with ImGui_ImplSDL2_GamepadMode_Manual and an empty array. (#8329)
@@ -2101,6 +2753,14 @@ Other changes:
 - Backends: DirectX12: Texture upload use the command queue provided in
   ImGui_ImplDX12_InitInfo instead of creating its own.
 - Backends: OSX: Removed notification observer when shutting down. (#8331) [@jrachele]
+
+Docking+Viewports Branch:
+
+- Docking: Fixed an issue in 1.91.7 where using legacy ImGuiWindowFlags_NavFlattened
+  flag (instead of ImGuiChildFlags_NavFlattened) in docking branch would conflict
+  with internal docking flags. (#8357) [@DanielGibson]
+- Backends: SDL3: new viewport windows are created with the SDL_WINDOW_HIDDEN flag
+  before calling SDL_ShowWindow(). (#8328) [@PathogenDavid]
 
 
 -----------------------------------------------------------------------
@@ -2236,6 +2896,15 @@ Other changes:
 - Examples: Win32+DX12: Using a basic free-list allocator to manage multiple
   SRV descriptors.
 
+Docking+Viewports Branch:
+
+- Docking: Added an assert to clarify that ImGuiDockNodeFlags_CentralNode flag
+  (from internals) does not need to be passed to DockSpace(), as it causes general
+  havoc. (#8145)
+- Backends: Win32: Fixed a crash/regression in 1.91.5 when running two processes
+  with multi-viewports (was using GetProp() to query property which could have
+  belonged to another process). (#8162, #8069) [@sammyfreg, @ocornut]
+
 
 -----------------------------------------------------------------------
  VERSION 1.91.5 (Released 2024-11-07)
@@ -2294,6 +2963,15 @@ Other changes:
 - Examples: SDL3+Vulkan: Added example. (#8084, #8085)
 - Examples: Android+OpenGL: Using ALooper_pollOnce() instead of ALooper_pollAll()
   which has been deprecated. (#8013) [@feather179]
+
+Docking+Viewports Branch:
+
+- Backends: GLFW: added Linux workaround for spurious mouse up events emitted while dragging
+  and creating new viewports. Generally they would be interrupting a dragging operations.
+  (#3158, #7733, #7922) [@rokups, @ocornut]
+- Docking: fixed using ImGuiDockNodeFlags_KeepAliveOnly with DockSpaceOverViewport():
+  the normally invisible space did erroneously claim mouse hover and could be potentially
+  focused. (#8125) [@kcbanner]
 
 
 -----------------------------------------------------------------------
@@ -2384,6 +3062,11 @@ Other changes:
 - Backends: DX9, DX10, DX11, DX12, OpenGL, Vulkan, WGPU: Changed default texture sampler
   to Clamp instead of Repeat/Wrap. (#7468, #7511, #5999, #5502, #7230)
 
+Docking+Viewports Branch:
+
+- Backends: changed all backends to allow enabling ImGuiConfigFlags_ViewportsEnable
+  after initialization. (#5371)
+
 
 -----------------------------------------------------------------------
  VERSION 1.91.3 (Released 2024-10-04)
@@ -2447,6 +3130,13 @@ Other changes:
 - Backends: WebGPU: Fixed DAWN api change using WGPUStringView in WGPUShaderSourceWGSL.
   (#8009, #8010) [@blitz-research]
 
+Docking+Viewports Branch:
+
+- Backends: SDL2, SDL3: Fixed building for UWP platforms. (#8008)
+- Backends: Win32: Use ResisterClassW()/CreateWindowExW() for secondary viewports, to
+  ensure correct IME input even if the backend was compiled in MBCS mode. (#7979, #5725)
+
+
 -----------------------------------------------------------------------
  VERSION 1.91.2 (Released 2024-09-19)
 -----------------------------------------------------------------------
@@ -2506,6 +3196,18 @@ Other changes:
   [@ypujante]
 - Backends: WebGPU: Added support for optional IMGUI_IMPL_WEBGPU_BACKEND_DAWN / IMGUI_IMPL_WEBGPU_BACKEND_WGPU
   defines to handle ever-changing native implementations. (#7977, #7969, #6602, #6188, #7523) [@acgaudette]
+
+Docking+Viewports Branch:
+
+- Viewports: fixed an issue where a window manually constrained to the main viewport while crossing
+  over main viewport bounds isn't translated properly. (#7985)
+- Backends: SDL2, SDL3, Win32: ensure that ImGuiPlatformMonitor list is available after backend Init call. (#7995)
+- Backends: Win32: fixed direct calls to platform_io.Platform_SetWindowPos()/Platform_SetWindowSize()
+  on windows created by application (typically main viewport).
+- Backends: Win32: fixed an issue where a viewport destroyed while clicking would hog
+  mouse tracking and temporary lead to incorrect update of HoveredWindow. (#7971)
+- Backends: SDL3: added support for viewport->ParentViewportId field to support parenting
+  windows at OS level. (#7973, #7989) [@RT2code]
 
 -----------------------------------------------------------------------
  VERSION 1.91.1 (Released 2024-09-04)
@@ -2589,6 +3291,16 @@ Other changes:
   - Examples: GLFW (all), SDL2 (all), SDL3 (all), Win32+OpenGL3: rework examples main loop
     to handle minimization without burning CPU or GPU by running unthrottled code. (#7844)
   - Examples: SDL3: Update for API changes: SDL_Init() returns 0 on failure.
+
+Docking+Viewports Branch:
+
+- Viewports: added optional platform_io.Platform_GetWindowWorkAreaInsets() hook
+  to allow backends to alter the default per-viewport work-area. (#7823)
+- Backends: don't report monitors with DpiScale of 0, which seemed to be reported for
+  virtual monitors instead by accessibility drivers. (#7902) [@nicolasnoble, @ocornut]
+- Backends: SDL2, SDL3: using SDL_HINT_WINDOW_NO_ACTIVATION_WHEN_SHOWN to support the
+  ImGuiViewportFlags_NoFocusOnAppearing flag, instead of using a Win32-specific hack.
+  (#7896) [@RT2Code]
 
 -----------------------------------------------------------------------
  VERSION 1.91.0 (Released 2024-07-30)
@@ -2749,6 +3461,16 @@ Other changes:
   - Backends: GLFW+Emscripten: Fixed Emscripten warning when using mouse wheel on some setups
     "Unable to preventDefault inside passive event listener". (#7647, #7600) [@ypujante]
 
+Docking+Viewports Branch:
+
+- Viewports: Always update fallback monitor to primary monitor if there's one.
+- Backends: OSX: Fixed NSAppKitVersion version limit for setWantsBestResolutionOpenGLSurface
+  usage. (#7814) [@YGXXD]
+- Backends: SDL3: Fixed a bug preventing ImGuiViewportFlags_NoFocusOnAppearing support from
+  working (Windows only).
+- Backends: Vulkan: ImGui_ImplVulkan_SwapBuffers() used by secondary viewports still proceeds
+  increasing frame counters on VK_SUBOPTIMAL_KHR. (#7825, #3881) [@NostraMagister]
+
 
 -----------------------------------------------------------------------
  VERSION 1.90.9 (Released 2024-07-01)
@@ -2825,10 +3547,23 @@ Other changes:
 - Backends: Vulkan: Remove Volk/ from volk.h #include directives. (#7722, #6582, #4854)
   [@martin-ejdestig]
 - Examples: SDL3: Remove use of SDL_HINT_IME_NATIVE_UI since new SDL_HINT_IME_IMPLEMENTED_UI
-  values has a more suitable default for our case case.
+  values has a more suitable default for our case.
 - Examples: GLFW+Vulkan, SDL+Vulkan: handle swap chain resize even without Vulkan
   returning VK_SUBOPTIMAL_KHR, which doesn't seem to happen on Wayland. (#7671)
   [@AndreiNego, @ocornut]
+
+Docking+Viewports Branch:
+
+- Windows, Menus: Fixed an issue where the size of sub-menu in their own viewport
+  would be erroneously clamped to the size of main viewport. (#7730)
+- Merged GetBackgroundDrawList() and GetBackgroundDrawList(ImGuiViewport* viewport)
+  api entry points into a same one GetBackgroundDrawList(ImGuiViewport* viewport = NULL);
+- Merged GetForegroundDrawList() and GetForegroundDrawList(ImGuiViewport* viewport)
+  api entry points into a same one GetForegroundDrawList(ImGuiViewport* viewport = NULL);
+- Backends: SDL3: Update for introduction of SDL_GLContext from void*. (#7701, #7702)
+  [@bcsanches]
+- Backends: Win32: Secondary viewports WndProc handler retrieve/set imgui context from
+  the HWND, allowing WndProc dispatch to work in multi-context setups.
 
 
 -----------------------------------------------------------------------
@@ -2980,6 +3715,15 @@ versions of IsKeyPressed(), IsKeyChordPressed(), IsMouseClicked() prior to this 
   those API public. Only past users of imgui_internal.h with the extra parameters will be affected.
   Added asserts for valid flags in various functions to detect _some_ misuses, BUT NOT ALL.
 
+Docking+Viewports Branch:
+
+- Docking: *BREAKING* changed signature of DockSpaceOverViewport() to allow passing
+  an explicit dockspace id if desired. (#7611)
+    Before: DockSpaceOverViewport(const ImGuiViewport* viewport = NULL, ImGuiDockNodeFlags flags = 0, ...);
+    After:  DockSpaceOverViewport(ImGuiID dockspace_id = 0, const ImGuiViewport* viewport = NULL, ImGuiDockNodeFlags flags = 0, ...);
+  Simply add a leading 0 to your existing calls to DockSpaceOverViewport() if you have any.
+- Tables: resizing border hit-rect scales according to current monitor dpi scale.
+
 
 -----------------------------------------------------------------------
  VERSION 1.90.6 (Released 2024-05-08)
@@ -3038,6 +3782,18 @@ Other changes:
 - Examples: GLFW+WebGPU: Added support for WebGPU-native/Dawn (#7435, #7132) [@eliasdaler, @Zelif]
 - Examples: GLFW+WebGPU: Renamed example_emscripten_wgpu/ to example_glfw_wgpu/. (#7435, #7132)
 
+Docking+Viewports Branch:
+
+- Docking: when io.ConfigDockingWithShift is enabled, fixed help tooltip erroneously
+  reading SetNextWindowXXX() data. (#6709, #4643, #7491) [@ocornut, @cfillion]
+- Viewports: fixed outer-right edge of MenuBar clipping rectangle off by one when window
+  is located on a monitor with negative coordinates. (#6861, #2884) [@cfillion]
+- Backends: Vulkan: reworked swap-chain resize handling for secondary viewports, fix for
+  typical Linux setups. (#2626, #3390, #3758, #7508, #7513) [@RoryO, @InsideBSITheSecond]
+- Backends: Vulkan: create a custom pipeline for secondary viewports. Fixes issues
+  when user created main viewport uses a different renderpass. (#6325, #6305, #7398,
+  #3459, #3253, #3522) [@skaman, @FunMiles]
+
 
 -----------------------------------------------------------------------
  VERSION 1.90.5 (Released 2024-04-11)
@@ -3094,6 +3850,11 @@ Other changes:
     Adding a link to the crawlable version, even though it is not intended for humans,
     to increase its search rank.
 
+Docking+Viewports Branch:
+
+- Backends: Win32: made it so that an appearing viewport showing up doesn't bring
+  its parent to front. (#7354)
+
 
 -----------------------------------------------------------------------
  VERSION 1.90.4 (Released 2024-02-22)
@@ -3126,6 +3887,13 @@ Other changes:
 - Misc: Added optional alpha multiplier parameter to GetColorU32(ImU32) variant.
 - Demo: Custom Rendering: better demonstrate PathArcTo(), PathBezierQuadraticCurveTo(),
   PathBezierCubicCurveTo(), PathStroke(), PathFillConvex() functions.
+
+Docking+Viewports Branch:
+
+- Backends: GLFW: enable ImGuiBackendFlags_HasMouseHoveredViewport support with GLFW 3.3.x,
+  as required specs for it was relaxed in 1.87. This enable better viewport hovering detection
+  without GLFW 3.4's GLFW_MOUSE_PASSTHROUGH, with less reliance on dear imgui's own heuristic
+  of platform windows order. (#7316)
 
 
 -----------------------------------------------------------------------
@@ -3214,6 +3982,18 @@ Other changes:
 - Internals: InputText: Added internal helpers to force reload of user-buf when active. (#2890) [@kudaba, @ocornut]
   Often requested in some form (#6962, #5219, #3290, #4627, #5054, #3878, #2881, #1506, #1216, #968),
   and useful for interactive completion/suggestions popups (#2057, #718)
+
+Docking+Viewports Branch:
+
+- Added ImGuiWindowClass::FocusRouteParentWindowId as a way to connect the focus route between
+  a tool window to a parent document window, so that Shortcuts in the documents are routed when the
+  tool is focused (regardless of whether the tool is docked or in a floating viewport, etc.) (#6798)
+- Added ImGuiDockNodeFlags_DockedWindowsInFocusRoute to automatically make a dockspace connect
+  the focus route of its docked window. This is provided a convenience in case you have windows
+  where a connection is not explicit. (#6798)
+- Viewports: Fixed moving accross monitors when io.ConfigWindowsMoveFromTitleBarOnly is set. (#7299, #3071)
+- Backends: OSX: Fixed not submitting Monitors info when viewports are not enabled, leading to
+  missing e.g. DpiScale info. (#7257) [@actboy168]
 
 
 -----------------------------------------------------------------------
@@ -3318,6 +4098,15 @@ Other changes:
   - Examples: GLFW+Emscripten: Fixed examples not consistently resizing according to host canvas.
     (#6751) [@Traveller23, @ypujante]
   - Examples: SDL3: Minor fixes following recent SDL3 in-progress development.
+
+Docking+Viewports Branch:
+
+- Windows: Fixed ImGuiCol_TitleBg/Active alpha being used for viewport-owned windows. (#7181) [@PathogenDavid]
+- Backends: DX12: Changed swapchain scaling mode to DXGI_SCALING_NONE to reduce artifacts as
+  queued frames aren't synchronized with platform window resizes. (#7152, #7153) [@SuperWangKai]
+- Backends: OSX: Fixed monitor and window position by correctly transforming Y origin on multi-viewports
+  multi-monitor setups. (#7028, #7101, #6009, #6432) [@dmirty-kuzmenko, @734vin]
+- Backends: OSX: Fixed IME position in multi-monitor multi-viewports setups. (#7028) [@734vin]
 
 
 -----------------------------------------------------------------------
@@ -3513,6 +4302,8 @@ Other changes:
   Fixed leaks, and added ImGui_ImplVulkan_DestroyFontsTexture() (probably no need to call this directly).
   (#6943, #6715, #6327, #3743, #4618)
   [@helynranta, @thomasherzog, @guybrush77, @albin-johansson, @MiroKaku, @benbatya-fb, @ocornut]
+- Backends: Vulkan: use specified ColorAttachmentFormat when creating a secondary window when enabling
+  UseDynamicRendering option. (#6999, #5446, #5037) [@raaaviol]
 - Backends: GLFW: Clear emscripten's MouseWheel callback before shutdown. (#6790, #6096, #4019) [@halx99]
 - Backends: GLFW: Added support for F13 to F24 function keys. (#6891)
 - Backends: SDL2, SDL3: Added support for F13 to F24 function keys, AppBack, AppForward. (#6891)
@@ -3529,6 +4320,31 @@ Other changes:
 - Backends: OSX: Added support for F13 to F20 function keys. Support mapping F13 to PrintScreen. (#6891)
 - Examples: GLFW+Vulkan, SDL+Vulkan: Simplified and removed code due to backend improvements.
 - Internals: Renamed ImFloor() to ImTrunc(). Renamed ImFloorSigned() to ImFloor(). (#6861)
+
+Docking+Viewports Branch:
+
+- Viewports: Fixed window inner clipping rectangle off by one when window is located on a monitor
+  with negative coordinates. While it is expected that other small issues with arise from this
+  situation, at the moment we are fixing the most noticeable one. (#6861, #2884) [@Vuhdo, @alektron]
+- Docking: revised undocking to reduce accidental whole-node undocking:
+  - cannot undock a whole node by dragging from empty space in tab-bar.
+  - can undock whole node by dragging from window/collapse menu button.
+  - can undock single window by dragging from its tab.
+  - can still move (but not undock) whole node or whole hierarchy when node is part of a
+    floating hierarchy.
+  - added tooltip when hovering the collapse/window menu button, to faciliate understanding
+    that whole dock node may be undocked or grabbed from here.
+- Docking: Fixed an issue leading to incorrect restoration of selected tab in dock nodes that
+  don't carry the currently focused window. (#2304)
+- Docking: added ImGuiDockNodeFlags_NoUndocking. (#2999, #6823, #6780, #3492)
+- Docking: renamed ImGuiDockNodeFlags_NoSplit to ImGuiDockNodeFlags_NoDockingSplit.
+- Docking: renamed ImGuiDockNodeFlags_NoDockingInCentralNode to ImGuiDockNodeFlags_NoDockingOverCentralNode.
+- Docking: Internals: renamed ImGuiDockNodeFlags_NoDockingSplitMe to ImGuiDockNodeFlags_NoDockingSplit.
+- Docking: Fixed a bug where ClassId compare tests (when using SetNextWindowClass) on success would
+  prevent further filter from running, namely the one that prevent docking over a popup.
+- Backends: GLFW: Fixed an assertion in situation where the WndProc handler is different between
+  main and secondary viewport (may happen due to third-party hooks). (#6889)
+- Backends: DX9: Fixed incorrect assert triggering on reopening session with minimized windows. (#3424)
 
 
 -----------------------------------------------------------------------
@@ -3586,6 +4402,11 @@ Other changes:
   need to care about rendering backend.
 - Examples: Emscripten+WebGPU: Fixed WGPUInstance creation process + use preferred
   framebuffer format. (#6640, #6748) [@smileorigin]
+
+Docking+Viewports Branch:
+
+- Docking: when io.ConfigDockingWithShift is enabled, staying stationary while moving
+  a window displays an help tooltip to increase affordance. (#6709, #4643)
 
 
 -----------------------------------------------------------------------
@@ -3656,6 +4477,16 @@ Other changes:
 - Backends: WebGPU: Update for changes in Dawn. (#6602, #6188) [@williamhCode]
 - Examples: Vulkan: Creating minimal descriptor pools to fit only what is needed by
   example. (#6642) [@SaschaWillem]
+
+Docking+Viewports Branch:
+
+- Docking, Style: resizing separators use same colors as window borders (ImGuiCol_Border)
+  for consistency. With default styles it doesn't make a big difference. (#2522) [@rmitton]
+  In the future if we promote using thick value for inner/outer docking padding we may
+  need to introduce new colors for it.
+- Docking: added style.DockingSeparatorSize, ImGuiStyleVar_DockingSeparatorSize. Now
+  also scaled by style.ScaleAllSizes(). (#3481, #4721, #2522) [@PossiblyAShrub, @wobbier]
+- Docking: fixed rendering of docked-window scrollbar above outer border. (#2522)
 
 
 -----------------------------------------------------------------------
@@ -3752,6 +4583,23 @@ Other changes:
 - Examples: Win32+OpenGL3: Changed DefWindowProc() to DefWindowProcW() to match other examples
   and support the example app being compiled without UNICODE. (#6516, #5725, #5961, #5975) [@yenixing]
 
+Docking+Viewports Branch:
+
+- Viewports+Docking: Fixed extraneous viewport+platform-window recreation in various
+  combination of showing or hiding windows, docking with/without split, undocking.
+  While with some backends and without OS decorations, some extraneous window recreation
+  were visibly not noticeable, they would typically become noticeable when enabling
+  OS decorations on those windows (e.g. Windows title bar fade-in/animation).
+- Viewports: Closing a viewport via OS/platform means (e.g. OS close button or task-bar menu),
+  mark all windows in this viewport as closed.
+- Docking: Fixed one-frame flickering on reappearing windows binding to a dock node
+  where a later-submitted window was already bound.
+- Docking: Fixed dragging from title-bar empty space (regression from 1.88 related to
+  keeping ID alive when calling low-level ButtonBehavior() directly). (#5181, #2645)
+- Docking: [Internal] DockBuilderDockWindow() API calls don't clear docking order
+  if the target node is same as existing one.
+- Backends: Win32: Added support for changing ParentViewportID after viewport creation.
+
 
 -----------------------------------------------------------------------
  VERSION 1.89.6 (Released 2023-05-31)
@@ -3821,6 +4669,23 @@ Other changes:
 - Examples: Added SDL3+SDL_Renderer example. (#6286)
 - Examples: Updated all Visual Studio projects and batches to use /utf-8 argument.
 
+Docking+Viewports Branch:
+
+- Viewports: Fixed platform-side focus (e.g. Alt+Tab) from leading to accidental
+  closure of Modal windows. Regression from 1.89.5. (#6357, #6299)
+- Viewports: Fixed loss of imgui-side focus when dragging a secondary viewport back in
+  main viewport, due to platform-side handling changes. Regression from 1.89.5 (#6299)
+- Viewports: Avoid applying imgui-side focus when focus change is due to a viewport
+  destruction. Fixes erroneous popup closure on closing a previous popup. (#6462, #6299)
+- Viewports: Added void* ImGuiPlatformMonitor::PlatformHandle field (backend-dependant),
+  for usage by user code.
+- Backends: GLFW: Preserve monitor list when there are no monitor, may briefly
+  happen when recovering from macOS sleeping mode. (#5683) [@Guistac]
+- Backends: SDL2: Update monitor list when receiving a display event. (#6348)
+  Note however that SDL2 currently doesn't have an event for a DPI/Scaling change,
+  so monitor data won't be updated in this situation.
+- Backends: SDL3: Update monitor list when receiving a display event. (#6348)
+
 
 -----------------------------------------------------------------------
  VERSION 1.89.5 (Released 2023-04-13)
@@ -3878,7 +4743,6 @@ Other changes:
   is to other IME function such as SDL_SetTextInputRect(). (#6306, #6071, #1953)
 - Backends: GLFW: Added support on Win32 only for io.AddMouseSourceEvent() to discriminate
   Mouse/TouchScreen/Pen. (#2334, #2702)
-- Backends: GLFW: Fixed key modifiers handling on secondary viewports. (#6248, #6034) [@aiekick]
 - Backends: Android: Added support for io.AddMouseSourceEvent() to discriminate Mouse/TouchScreen/Pen.
   (#6315) [@PathogenDavid]
 - Backends: OSX: Added support for io.AddMouseSourceEvent() to discriminate Mouse/Pen.
@@ -3893,6 +4757,16 @@ Other changes:
 - Examples: SDL3: Updated for latest WIP SDL3 branch. (#6243)
 - TestSuite: Added variety of new regression tests and improved/amended existing ones
   in imgui_test_engine/ repo. [@PathogenDavid, @ocornut]
+
+Docking+Viewports Branch:
+
+- Viewports: Setting focus from Platform/OS (e.g. via decoration, or Alt-Tab) sets corresponding
+  focus at Dear ImGui level (generally last focused window in the viewport). (#6299)
+- Docking: Fixed using GetItemXXX() or IsItemXXX() functions after a DockSpace(). (#6217)
+- Backends: GLFW: Fixed key modifiers handling on secondary viewports. (#6248, #6034) [@aiekick]
+- Backends: GLFW: Fixed Emscripten erroneously enabling multi-viewport support, leading to assert. (#5683)
+- Backends: SDL2/SDL3: Fixed IME text input rectangle position with viewports. (#6071, #1953)
+- Backends: SDL3: Fixed for compilation with multi-viewports. (#6255) [@P3RK4N]
 
 
 -----------------------------------------------------------------------
@@ -3967,7 +4841,6 @@ Other changes:
 - Examples: Updated all examples application to enable ImGuiConfigFlags_NavEnableKeyboard
   and ImGuiConfigFlags_NavEnableGamepad by default. (#787)
 - Internals: Misc tweaks to facilitate applying an explicit-context patch. (#5856) [@Dragnalith]
-
 
 -----------------------------------------------------------------------
  VERSION 1.89.3 (Released 2023-02-14)
@@ -4069,6 +4942,10 @@ Other changes:
 - Examples: SDL2+SDL_Renderer: Added call to SDL_RenderSetScale() to fix display on a
   Retina display (albeit lower-res as our other unmodified examples). (#6121, #6065, #5931).
 
+Docking+Viewports Branch:
+
+- Backends: GLFW: Handle unsupported glfwGetVideoMode() for Emscripten. (#6096)
+
 
 -----------------------------------------------------------------------
  VERSION 1.89.2 (Released 2023-01-05)
@@ -4119,6 +4996,17 @@ All changes:
 - Backends: Vulkan: Fixed sampler passed to ImGui_ImplVulkan_AddTexture() not being honored as we were using
   an immutable sampler. (#5502, #6001, #914) [@martin-ejdestig, @rytisss]
 
+Docking+Viewports Branch:
+
+- Docking: Internals: fixed DockBuilderCopyDockSpace() crashing when windows not in the
+  remapping list are docked on the left or top side of a split. (#6035)
+- Docking: fixed DockSpace() with ImGuiDockNodeFlags_KeepAliveOnly marking current window
+  as written to, even if it doesn't technically submit an item. This allow using KeepAliveOnly
+  from any window location. (#6037)
+- Backends: OSX: fixed typo in ImGui_ImplOSX_GetWindowSize that would cause issues when resiing
+  from OS decorations, if they are enabled on secondary viewports. (#6009) [@sivu]
+- Backends: Metal: fixed secondary viewport rendering. (#6015) [@dmirty-kuzmenko]
+
 
 -----------------------------------------------------------------------
  VERSION 1.89.1 (Released 2022-11-24)
@@ -4144,6 +5032,13 @@ Other changes:
   from within a drag source handler. (#5910, #143)
 - Backends: GLFW: cancel out errors emitted by glfwGetKeyName() when a name is missing. (#5908)
 - Backends: WebGPU: fixed validation error with default depth buffer settings. (#5869, #5914) [@kdchambers]
+
+Docking+Viewports Branch:
+
+- Viewports: Fixed collapsed windows setting ImGuiViewportFlags_NoRendererClear without
+  making title bar color opaque, leading to potential texture/fb garbage being visible.
+  Right now as we don't fully support transparent viewports (#2766), so we turn that
+  'TitleBgCollapsed' color opaque just lke we do for 'WindowBG' on uncollapsed windows.
 
 
 -----------------------------------------------------------------------
@@ -4336,6 +5231,23 @@ Other Changes:
 - Backends: Vulkan: Added experimental ImGui_ImplVulkan_RemoveTexture() for api symmetry. (#914, #5738).
 - Backends: WebGPU: fixed rendering when a depth buffer is enabled. (#5869) [@brainlag]
 
+Docking+Viewports Branch:
+
+- Docking: Fixed incorrect focus highlight on docking node when focusing a menu. (#5702)
+- Docking, Nav: Fixed using gamepad/keyboard navigation not being able enter menu layer when
+  it only contained the standard Collapse/Close buttons and no actual menu. (#5463, #4792)
+- Docking: Fixed regression introduced in v1.87 when docked window content not rendered
+  while switching between with CTRL+Tab. [@rokups]
+- Docking: Fixed amending into an existing tab bar from rendering invisible items. (#5515)
+- Docking: Made spacing between dock nodes not a dropping gap. When hovering it only
+  outer-docking drop markers are visible.
+- Docking+Viewports: Fixed undocking window node causing parent viewports to become unresponsive
+  in certain situation (e.g. hidden tab bar). (#5503) [@rokups]
+- Backends: SDL: Fixed building backend under non-OSX Apple targets (e.g. iPhone). (#5665)
+- Backends: SDL: Fixed drag'n drop crossing a viewport border losing mouse coordinates. (#5710, #5012)
+- Backends: GLFW: Fixed leftover static variable preventing from changing or
+  reinitializing backend while application is running. (#4616, #5434) [@rtoumazet]
+
 
 -----------------------------------------------------------------------
  VERSION 1.88 (Released 2022-06-21)
@@ -4469,6 +5381,26 @@ Other Changes:
   and vertex attribute states. [@rokups]
 - Examples: Emscripten+WebGPU: Fix building for latest WebGPU specs. (#3632)
 - Examples: OSX+Metal, OSX+OpenGL: Removed now-unnecessary calls to ImGui_ImplOSX_HandleEvent(). (#4821)
+
+Docking+Viewports Branch:
+
+- Docking: Fixed floating docked nodes not being clamped into viewport workrect to stay reachable
+  when io.ConfigWindowsMoveFromTitleBarOnly is true and multi-viewports are disabled. (#5044)
+- Docking: Fixed a regression where moving window would be interrupted after undocking a tab
+  when io.ConfigDockingAlwaysTabBar is true. (#5324) [@rokups]
+- Docking: Fixed incorrect focus highlight on docking node when focusing empty central node
+  or a child window which was manually injected into a dockspace window.
+- Docking, Modal: Fixed a crash when opening popup from a parent which is being docked on the same frame. (#5401)
+- Viewports: Fixed an issue where MouseViewport was lagging by a frame when using 1.87 Input Queue.
+  A common side-effect would be that when releasing a window drag the underlying window would highlight
+  for a frame. (#5837, #4921) [@cfillion]
+- Viewports: Fixed translating a host viewport from briefly altering the size of AlwaysAutoResize windows. (#5057)
+- Viewports: Fixed main viewport size not matching ImDrawData::DisplaySize for one frame during resize
+  when multi-viewports are disabled. (#4900)
+- Backends: SDL: Fixed dragging out main viewport broken on some SDL setups. (#5012) [@rokups]
+- Backends: OSX: Added support for multi-viewports. [@stuartcarnie, @metarutaiga] (#4821, #2778)
+- Backends: Metal: Added support for multi-viewports. [@stuartcarnie, @metarutaiga] (#4821, #2778)
+- Examples: OSX+Metal, SDL+Metal, GLFW+Metal: Added support for multi-viewports. [@rokups]
 
 
 -----------------------------------------------------------------------
@@ -4613,6 +5545,29 @@ Other Changes:
 - Backends: WebGPU: Fixed incorrect size parameters in wgpuRenderPassEncoderSetIndexBuffer() and
   wgpuRenderPassEncoderSetVertexBuffer() calls. (#4891) [@FeepsDev]
 
+Docking+Viewports Branch:
+
+- Docking: Fixed a CTRL+TAB crash when aiming at an empty docked window. (#4792)
+- Docking: Tabs use their own identifier instead of the Window identifier.
+  (This will invalidate some stored .ini data such as last selected tab, sorry!)
+- Docking: Fixed size constraints not working on single window holding on a dock id (still doesn't work on docked windows).
+- Docking: Fixed CTRL+TAB back into a docked window not selecting menu layer when no item are on main layer.
+- Viewports, IO: Added io.AddMouseViewportEvent() function to queue hovered viewport change (when known by backend).
+- Viewports: Relaxed specs for backend supporting ImGuiBackendFlags_HasMouseHoveredViewport: it is now _optional_
+  for the backend to have to ignore viewports with the _NoInputs flag when call io.AddMouseViewportEvent(). It is
+  much better if they can (Win32 and GLFW 3.3+ backends can, SDL and GLFW 3.2 backends cannot, they are lacking data).
+  A concrete example is: when dragging a viewport for docking, the viewport is marked with _NoInputs to allow us
+  to pick the target viewports for docking. If the backend reports a viewport with _NoInputs when calling the
+  io.AddMouseViewportEvent() function, then Dear ImGui will revert to its flawed heuristic to find the viewport under.
+  By lowering those specs, we allow the SDL and more backend to support this, only relying on the heuristic in a few
+  drag and drop situations rather that relying on it everywhere.
+- Viewports: Fixed a CTRL+TAB crash with viewports enabled when the window list needs to appears in
+  its own viewport (regression from 1.86). (#4023, #787)
+- Viewports: Fixed active InputText() from preventing viewports to merge. (#4212)
+- Backends: SDL: Added support for ImGuiBackendFlags_HasMouseHoveredViewport now that its specs have been lowered.
+- (Breaking) Removed ImGuiPlatformIO::Platform_SetImeInputPos() in favor of newly standardized
+  io.SetPlatformImeDataFn() function. Should not affect more than default backends.
+
 
 -----------------------------------------------------------------------
  VERSION 1.86 (Released 2021-12-22)
@@ -4711,6 +5666,24 @@ Other Changes:
   wgpuRenderPassEncoderSetIndexBuffer() functions as validation layers appears to not do what the
   in-flux specs says. (#4766) [@meshula]
 
+Docking+Viewports Branch:
+
+- Docking: Revert removal of io.ConfigDockingWithShift config option (removed in 1.83). (#4643)
+- Docking: Fixed a bug undocking windows docked into a non-visible or _KeepAliveOnly dockspace
+  when unrelated windows submitted before the dockspace have dynamic visibility. (#4757)
+- Docking, Style: Docked windows honor ImGuiCol_WindowBg. (#2700, #2539)
+- Docking, Style: Docked windows honor display their border properly. (#2522)
+- Docking: Fixed incorrectly rounded tab bars for dock node that are not at the top of their dock tree.
+- Docking: Fixed single-frame node pos/size inconsistencies when window stop or start being submitted.
+- Docking: Prevent docking any window created above a popup/modal. (#4317)
+- Viewports: Made it possible to explicitly assign ImGuiWindowClass::ParentViewportId to 0 in order
+  to ensure a window is not parented. Previously this would use the global default (which might be 0,
+  but not always as it would depend on io.ConfigViewportsNoDefaultParent). (#3152, #2871)
+- Viewports: Fixed tooltip in own viewport over modal from being incorrectly dimmed. (#4729)
+- Viewports: Fixed CTRL+TAB highlight outline on docked windows not always fitting in host viewport.
+- Backends: Made it possible to shutdown default Platform Backends before the Renderer backends. (#4656)
+- Disabled: Fixed nested BeginDisabled()/EndDisabled() bug in Docking branch due to bad merge. (#4655, #4452, #4453, #4462)
+
 
 -----------------------------------------------------------------------
  VERSION 1.85 (Released 2021-10-12)
@@ -4729,6 +5702,10 @@ Breaking Changes:
   Can use 'GetWindowContentRegionMax().x - GetWindowContentRegionMin().x' instead but it's not
   very useful in practice, and the only use of it in the demo was illfit.
   Using 'GetContentRegionAvail().x' is generally a better choice.
+- (Docking branch) IsWindowFocused() and IsWindowHovered() with only the _ChildWindows flag
+  and without the _RootWindow flag used to leak docking hierarchy, so a docked window would
+  return as the child of the window hosting the dockspace. This was inconsistent and incorrect
+  with other behaviors so we fixed it. Added a new _DockHierarchy flag to opt-in this behavior.
 
 Other Changes:
 
@@ -4778,7 +5755,7 @@ Other Changes:
 - ColorPicker4: Fixed picker being unable to select exact 1.0f color when dragging toward the edges
   of the SV square (previously picked 0.999989986f). (#3517) [@rokups]
 - Menus: Fixed vertical alignments of MenuItem() calls within a menu bar (broken in 1.84). (#4538)
-- Menus: Improve closing logic when moving diagonally in empty between between parent and child menus to
+- Menus: Improve closing logic when moving diagonally in empty space between parent and child menus to
   accommodate for varying font size and dpi.
 - Menus: Fixed crash when navigating left inside a child window inside a sub-menu. (#4510).
 - Menus: Fixed an assertion happening in some situations when closing nested menus (broken in 1.83). (#4640)
@@ -4801,6 +5778,29 @@ Other Changes:
 - Backends: OSX: Use mach_absolute_time as CFAbsoluteTimeGetCurrent can jump backwards. (#4557, #4563) [@lfnoise]
 - Backends: All renderers: Normalize clipping rect handling across backends. (#4464)
 - Examples: Added SDL + SDL_Renderer example in "examples/example_sdl_sdlrenderer/" folder. (#3926) [@1bsyl]
+
+Docking+Viewports Branch:
+
+- IsWindowFocused: Fixed using ImGuiFocusedFlags_ChildWindows (without _RootWindow) from leaking the
+  docking hierarchy. Added ImGuiFocusedFlags_DockHierarchy flag to consider docking hierarchy in the test.
+- IsWindowHovered: Fixed using ImGuiHoveredFlags_ChildWindows (without _RootWindow) from leaking the
+  docking hierarchy. Added ImGuiHoveredFlags_DockHierarchy flag to consider docking hierarchy in the test.
+- Nav: Fixed an issue with losing focus on docked windows when pressing Alt while keyboard navigation
+  is disabled. (#4547, #4439) [@PathogenDavid]
+- Docking: Fixed IsItemHovered() and functions depending on it (e.g. BeginPopupContextItem()) when
+  called after Begin() on a docked window (broken 2021/03/04). (#3851)
+- Docking: Improved resizing system so that non-central zone are better at keeping their fixed size.
+  The algorithm is still not handling the allocation of size ideally for nested sibling, but it got better.
+- Docking: Fixed settings load issue when mouse wheeling. (#4310)
+- Docking: Fixed manually created floating node with a central node from not hiding when windows are gone.
+- Docking + Drag and Drop: Fixed using BeginDragDropSource() or BeginDragDropTarget() inside a Begin()
+  that returned false because the window is docked. (#4515)
+- Viewports: Fixed a crash while a window owning its viewport disappear while being dragged.
+  It would manifest when e.g. reconfiguring dock nodes while dragging.
+- Viewports: Fixed unnecessary creation of temporary viewports when multiple docked windows
+  got reassigned to a new node (created mid-frame) which already has a HostWindow.
+- Viewports: Fixed window with viewport ini data immediately merged into a host viewport from
+  leaving a temporary viewport alive for a frame (would leak into backend).
 
 
 -----------------------------------------------------------------------
@@ -4938,6 +5938,25 @@ Other Changes:
 - Examples: Updated all .vcxproj to VS2015 (toolset v140) to facilitate usage with vcpkg.
 - Examples: SDL2: Accommodate for vcpkg install having headers in SDL2/SDL.h vs SDL.h.
 
+Docking+Viewports Branch:
+
+- Docking: Clicking on the right-most close button of a docking node closes all windows. (#4186)
+- Docking: Fix IsWindowAppearing() and ImGuiCond_Appearing on docked windows. (#4177, #3982, #1497, #1061)
+- Docking: Fix crash using DockBuilderRemoveNode() in some situations. (#3111, #3179, #3203, #4295) [@hsimyu]
+- Docking: Fix crash when a dock node gets re-qualified as dockspace>floating>dockspace, which tends to happen
+  when incorrectly calling DockBuilderAddNode() without ImGuiDockNodeFlags_Dockspace and using it as a Dockspace
+  on the next frame after the floating window hosting the node has been automatically created. (#3203, #4295)
+- Docking: Reworked node flags saving/inheritance so that flags enforced by docked windows via the
+  DockNodeFlagsOverrideSet mechanism are are not left in empty dockspace nodes once the windows gets undocked.
+  (#4292, #3834, #3633, #3521, #3492, #3335, #2999, #2648)
+- Docking: (Internal/Experimental) Removed DockNodeFlagsOverrideClear flags from ImGuiWindowClass as
+  it is ambiguous how to apply them and we haven't got a use out of them yet.
+- Docking: Fixed ImGuiWindowFlags_UnsavedDocument clipping label in docked windows when there are
+  no close button. (#5745)
+- Viewports: Fix popup/tooltip created without a parent window from being given a ParentViewportId value
+  from the implicit/fallback window. (#4236, #2409)
+- Backends: Vulkan: Fix the use of the incorrect fence for secondary viewports. (#4208) [@FunMiles]
+
 
 -----------------------------------------------------------------------
  VERSION 1.83 (Released 2021-05-24)
@@ -5021,6 +6040,22 @@ Other Changes:
 - Examples: Android: Make Android example build compatible with Gradle 7.0. (#3446)
 - Docs: Improvements to description of using colored glyphs/emojis. (#4169, #3369)
 - Docs: Improvements to minor mistakes in documentation comments (#3923) [@ANF-Studios]
+
+Docking+Viewports Branch:
+
+- [Breaking] Removed io.ConfigDockingWithShift config option. Behavior always equivalent to having the
+  option set to false (dock/undock by default, hold shift to avoid docking). (#2109)
+- Docking: DockSpace() returns its node ID.
+- Docking: Dockspace() never draws a background. (#3924)
+- Docking: Undocking nodes/windows covering most of the monitor max their size down to 90% to ease manipulations.
+- Docking: Docking node tab bar honors ItemInnerSpacing.x before first tab. (#4130)
+- Docking: Tweak rendering and alignment of dock node menu marker. (#4130)
+- Docking: Fixed restoring of tab order within a dockspace or a split node.
+- Docking: Fixed reappearing docked windows with no close button showing a tab with extraneous space for one frame.
+- Docking: Fixed multiple simultaneously reappearing window from appearing undocked for one frame.
+- Viewports: Hotfix for crash in monitor array access, caused by 4b9bc4902. (#3967)
+- Backends, Viewports: GLFW: Add a workaround for stuck keys after closing a GLFW window (#3837).
+- Backends, Viewports: Vulkan: Rebuild swapchain on VK_SUBOPTIMAL_KHR. (#3881)
 
 
 -----------------------------------------------------------------------
@@ -5117,6 +6152,13 @@ Other Changes:
   scheduled builds builds are not required. [@rokups]
 - Log/Capture: Added LogTextV, a va_list variant of LogText. [@PathogenDavid]
 
+Docking+Viewports Branch:
+
+- Viewports: Fix setting of ImGuiViewportFlags_NoRendererClear. (#3213)
+- Viewports: Added GetViewportPlatformMonitor() with a safety net to keep code portable.
+- Viewports, Backends: SDL: Fix missing ImGuiBackendFlags_HasSetMousePos flag in docking branch.
+- Viewports, Backends: GLFW: Fix application of WantSetMousePos. (#1542, #787)
+
 
 -----------------------------------------------------------------------
  VERSION 1.81 (Released 2021-02-10)
@@ -5197,6 +6239,17 @@ Other Changes:
   Please note that WebGPU is currently experimental, will not run on non-beta browsers, and may break.
 - Examples: WebGPU: Added Emscripten+WebGPU example. (#3632) [@bfierz]
 - Backends: GLFW: Added ImGui_ImplGlfw_InitForOther() initialization call to use with non OpenGL API. (#3632)
+
+Docking+Viewports Branch:
+
+- Docking: Fix losing docking information on closed windows for which the hosting node was split. (#3716) [@GamingMinds-DanielC]
+- Docking: Fix gap in hit test hole when using ImGuiDockNodeFlags_PassthruCentralNode touching the edge of a viewport. (#3733)
+- Viewports: (Breaking) removed ImGuiPlatformIO::MainViewport which is now pretty much unused and duplicate
+  (and misleading as we will evolve the concept).
+- Viewports: (Breaking) turned ImGuiViewport::GetWorkPos(), ImGuiViewport::GetWorkSize() into regular fields
+  (WorkPos, WorkSize) before exposing in master branch.
+- Viewports: Fix issue inferring viewport z-order when new popups gets created. (#3734) + Metrics updates.
+- Viewports, Backends: Vulkan: handle VK_ERROR_OUT_OF_DATE_KHR when resizing secondary viewport (#3766, #3758)
 
 
 -----------------------------------------------------------------------
@@ -5317,6 +6370,14 @@ Other Changes:
 - Docs: Split examples/README.txt into docs/BACKENDS.md and docs/EXAMPLES.md, and improved them.
 - Docs: Consistently renamed all occurrences of "binding" and "back-end" to "backend" in comments and docs.
 
+Docking+Viewports Branch:
+
+- Docking: Docked windows honor change of tab and text colors. (#2771)
+- Docking: Support for appending into existing tab-bar made to work with Docking + internal helper DockNodeBeginAmendTabBar().
+- Docking: Added experimental TabItemFlagsOverrideSet to ImGuiWindowClass.
+- Viewports: Fixed incorrect whitening of popups above a modal if both use their own viewport.
+- Viewports: Backends: Vulkan: Fixed build, removed extraneous pipeline creation. (#3459, #3579)
+
 
 -----------------------------------------------------------------------
  VERSION 1.79 (Released 2020-10-08)
@@ -5410,6 +6471,21 @@ Other Changes:
 - Examples: DX12: Enable breaking on any warning/error when debug interface is enabled.
 - Examples: DX12: Added '#define ImTextureID ImU64' in project and build files to also allow building
   on 32-bit systems. Added project to default Visual Studio solution file. (#301)
+
+Docking+Viewports Branch:
+
+- Docking: DockSpace() emits ItemSize() properly (useful when not filling all space).
+- Docking: Fixed docking while hovering a child window. (#3420) broken by 85a661d. Improve metrics debugging.
+- Docking: Fix honoring payload filter with overlapping nodes (we incorrectly over-relied on g.HoveredDockNode
+  when making change for #3398).
+- Docking: Fix handling of WindowMenuButtonPosition == ImGuiDir_None in Docking Nodes. (#3499)
+- Viewports: Fixed a rare edge-case if the window targeted by CTRL+Tab stops being rendered.
+- Viewports, Backends: DX12: Make secondary viewport format match main viewport one (#3462) {@BeastLe9enD]
+- Viewports: Backends: Vulkan: Removed unused shader code. Fix leaks. Avoid unnecessary pipeline creation for main
+  viewport. (#3459) + Add ImGui_ImplVulkanH_CreateWindowSwapChain in ImGui_ImplVulkanH_CreateOrResizeWindow().
+- Viewports: Backends: DirectX9: Recover from D3DERR_DEVICELOST on secondary viewports. (#3424)
+- Viewports, Backends: Win32: Fix toggling of ImGuiViewportFlags_TopMost (#3477) [@Kodokuna]
+- Viewports: Backends: GLFW: Workaround for cases where glfwGetMonitorWorkarea fails (#3457) [@dougbinks]
 
 
 -----------------------------------------------------------------------
@@ -5512,6 +6588,23 @@ Other Changes:
 - Examples: Vulkan: Fixed GLFW+Vulkan and SDL+Vulkan clear color not being set. (#3390) [@RoryO]
 - CI: Emscripten has stopped their support for their fastcomp backend, switching to latest sdk [@Xipiryon]
 
+Docking+Viewports Branch:
+
+- Docking: Made DockBuilderAddNode() automatically call DockBuilderRemoveNode(). (#3399, #2109)
+- Docking: Storing HoveredDockNode in context which can be useful for easily detecting e.g. hovering an
+  empty node. (#3398)
+- Docking: Fixed docking overlay bits appearing at (0,0), because of 43bd80a. Most typically noticeable
+  when disabling multi-viewport.
+- Docking: Workaround recovery for node created without the _DockSpace flags later becoming a DockSpace. (#3340)
+- Docking: Rework size allocations to recover when there's no enough room for nodes + do not hold on
+  _WantLockSizeOnce forever. (#3328)
+- Docking: Rework size allocation to allow user code to override node sizes. Not all edge cases will be
+  properly handled but this is a step toward toolbar emitting size constraints.
+- Docking: Added experimental flags to perform more docking filtering and disable resize per axis.
+  Designed for toolbar patterns.
+- Viewports, Backends, GLFW: Use GLFW_MOUSE_PASSTHROUGH when available.
+- Viewports, Backends: DX12: Fixed issue on shutdown when viewports are disabled. (#3347)
+
 
 -----------------------------------------------------------------------
  VERSION 1.77 (Released 2020-06-29)
@@ -5603,6 +6696,17 @@ Other Changes:
 - Examples: Apple: Fixed example_apple_metal and example_apple_opengl2 using imgui_impl_osx.mm
   not forwarding right and center mouse clicks. (#3260) [@nburrus]
 
+Docking+Viewports Branch:
+
+- Viewports: Don't set ImGuiViewportFlags_NoRendererClear when ImGuiWindowFlags_NoBackground is set. (#3213)
+- Viewports: Report minimized viewports as zero DisplaySize to be consistent with main branch. (#1542)
+- Docking, Settings: Allow reload of settings data at runtime. (#2573)
+- Backends, GLFW: Fix windows resizing incorrectly on Linux due to GLFW firing window positioning
+  callbacks on next frame after window is resized manually. (#2117)
+- Backends: DX12: Fix OBJECT_DELETED_WHILE_STILL_IN_USE on viewport resizing. (#3210)
+- Backends: DX12: Fix for crash caused by early resource release. (#3121)
+- Backends, Win32: Request monitor update when DPI awareness is enabled to make sure they have the correct DPI settings.
+
 
 -----------------------------------------------------------------------
  VERSION 1.76 (Released 2020-04-12)
@@ -5674,6 +6778,20 @@ Other Changes:
 - Examples: Win32+DX12: Fixed resizing main window, enabled debug layer. (#3087, #3115) [@sergeyn]
 - Examples: SDL+DX11: Fixed resizing main window. (#3057) [@joeslay]
 - Examples: Added SDL+Metal example application. (#3017) [@coding-jackalope]
+
+Docking+Viewports Branch:
+
+- Docking: Fixed assert preventing dockspace from being created instead a hidden tab. (#3101)
+- Viewports: Fixed secondary viewports accidentally merging into a minimized host viewport. (#3118)
+- Viewports, Docking: Added per-viewport work area system for e.g. menu-bars. Fixed DockspaceOverViewport()
+  and demo code (overlay etc) accordingly. (#3035, #2889, #2474, #1542, #2109)
+- Viewports: Improve menu positioning in multi-monitor setups. [@rokups]
+- Viewports: Software mouse cursor is also scaled by current DpiScale. (amend #939)
+- Viewports: Avoid manually clipping resize grips and borders, which messes up with automation ability
+  to locate those items. Also simpler and more standard.
+- Viewports: Fix for UWP in the imgui_impl_win32.cpp IME handler. (#2895, #2892).
+- Viewports: Bunch of extra of comments to facilitate setting up multi-viewports.
+- Viewports, GLFW: Avoid using window positioning workaround for GLFW 3.3+ versions that have it fixed.
 
 
 -----------------------------------------------------------------------
@@ -5773,6 +6891,21 @@ Other Changes:
 - Examples: Metal: Wrapped main loop in @autoreleasepool block to ensure allocations get freed
   even if underlying system event loop gets paused due to app nap. (#2910, #2917) [@bear24rw]
 
+Docking+Viewports Branch:
+
+- Docking + Nav: Fixed messed up Ctrl+Tab order with docked windows.
+- Docking + Nav: Fixed failing to restore NavId when refocusing a child within a docked window.
+- Docking + Nav: Fixed failing to restore NavId when refocusing due to missing nav window (when
+  it stops being submitted).
+- Docking: Fixed a bug where the tab bar of a hidden dockspace would keep requesting focus. (#2960)
+- Docking: Added experimental DockNodeFlagsOverrideSet/DockNodeFlagsOverrideClear flags in ImGuiWindowClass
+  (currently experimenting with toolbar idioms).
+- Viewports: Fix resizing viewport-owning windows when mouse pos is outside the InnerClipRect
+  (can happen with OS decoration enabled).
+- Viewports: Preserve last known size for minimized main viewport to be consistent with secondary viewports.
+- Backends: SDL: Honor NoTaskBarIcon flag under non Win32 OS. (#2117)
+- Backends: GLFW, SDL: Platform monitors declared properly even if multi-viewport is not enabled.
+
 
 -----------------------------------------------------------------------
  VERSION 1.74 (Released 2019-11-25)
@@ -5852,6 +6985,14 @@ Other Changes:
 - CI: Set up a bunch of continuous-integration tests using GitHub Actions. We now compile many of the example
   applications on Windows, Linux, MacOS, iOS, Emscripten. Removed Travis integration. (#2865) [@rokups]
 
+Docking+Viewports Branch:
+
+- Docking: Can undock from the small triangle button. (#2109,. #2645)
+- Docking: Fixed node->HasCloseButton not honoring ImGuiDockNodeFlags_NoCloseButton in a floating node,
+  leading to empty space at the right of tab-bars with those flags. (#2109)
+- Docking: Made docked windows not use style.ChildRounding.
+- Multi-viewports: Added multi-viewport support in the DX12 back-end. (#2851) [@obfuscate]
+
 
 -----------------------------------------------------------------------
  VERSION 1.73 (Released 2019-09-24)
@@ -5913,6 +7054,28 @@ Other Changes:
   [@intonarumori, @ElectricMagic]
 - Misc: Updated stb_rect_pack.h from 0.99 to 1.00 (fixes by @rygorous: off-by-1 bug in best-fit heuristic,
   fix handling of rectangles too large to fit inside texture). (#2762) [@tido64]
+
+Docking+Viewports Branch:
+
+- Docking: Fix BeginDocked() path that creates node so that SetNextWindowDockID() doesn't immediately discard the node. (#2109)
+- Docking: Fix for node created at the same time as windows that are still resizing (typically with
+  io.ConfigDockingAlwaysTabBar) to not be zero/min sized. (#2109). The fix delays their visibility by one frame,
+  which is not ideal but not very problematic as the .ini data gets populated after that.
+- Docking: Fix a crash that could occur with a malformed ini file (DockNode Parent value pointing to a missing node).
+- Viewport: Fix modal/popup window being stuck in unowned hidden viewport associated to fallback window without stealing
+  it back. Fix modal reference viewport when opened outside of another window. (#1542)
+- Viewport: Modals don't need to set ImGuiViewportFlags_NoFocusOnClick, this also mitigate the issue described by #2445,
+  which becomes particularly bad with unfocused modal. (#1542)
+- Viewport: better case case where host window gets moved and resized simultaneous (toggling maximized state).
+  There's no perfect solution there, than using io.ConfigViewportsNoAutoMerge = false. (#1542)
+- Viewport, Docking: Fixed incorrect assignment of IsFallbackWindow which would tag dock node host windows created
+  in NewFrame() as such, messing with popup viewport inheritance.
+- Viewport: Fixed issue where resize grip would display as hovered while mouse is still off the OS bounds so a click
+  would miss it and focus the OS window behind expected one. (#1542)
+- Viewport: Fix to allow multiple shutdown / calls to DestroyPlatformWindows(). (#2769)
+- Viewport: Backends: GLFW: Fix setting window size on macOS (#2767, #2117) [@rokups]
+- Viewport: Backends: GLFW+Linux: Fix window having incorrect size after uncollapse. (#2756, #2117) [@rokups]
+- Viewport: Backends: DirectX9: Workaround for windows not refreshing when main viewport has no draw call. (#2560)
 
 
 -----------------------------------------------------------------------
@@ -6015,6 +7178,25 @@ Other Changes:
 - Backends: SDL2: Added ImGui_ImplSDL2_InitForD3D() function to make D3D support more visible.
   (#2482, #2632) [@josiahmanson]
 - Examples: Added SDL2+DirectX11 example application. (#2632, #2612, #2482) [@vincenthamm]
+
+Docking+Viewports Branch:
+
+- Docking: Making it possible to undock a node by clicking on the tab bar / title bar for the node. (#2645).
+- Docking: Explicitly inhibit constraint when docked for now. Fix clipping issue related to constraints. (#2690).
+- Docking: Fixed dragging/resizing from OS decoration not marking settings as dirty.
+- Docking: Renamed io.ConfigDockingTabBarOnSingleWindows to io.ConfigDockingAlwaysTabBar.
+  Added ImGuiWindowClass::DockingAlwaysTabBar to set on individual windows.
+- Docking: Perform simple check: assert if Docking or Viewport are enabled exactly on frame 1 (instead of frame 0
+  or later), which is a common user error leading to loss of .ini data on load.
+- Docking: Fix so that an appearing window making a dock node reappear won't have a zero-size on its first frame.
+- Docking: Fixed using ImGuiDockNodeFlags_AutoHideTabBar with io.ConfigDockingTabBarOnSingleWindows.
+- Docking: Added ImGuiDockNode to .natvis file.
+- Docking: Fixed support for large meshes in GetBackgroundDrawList(), GetForegroundDrawList(). (#2638)
+- Viewport: Fix monitor dpi info not being copied to main viewport when multi-viewports are not enabled. (#2621, #1676)
+- Viewport: Refactored ImGuiWindowClass's ViewportFlagsOverrideMask + ViewportFlagsOverrideValue into
+  ViewportFlagsOverrideSet + ViewportFlagsOverrideClear which appears easier to grasp. (#1542)
+- Viewport: Added ImGuiViewportFlags_NoAutoMerge to prevent merging into host viewport in a per-window basis
+  via the ImGuiWindowClass override mechanism. (#1542)
 
 
 -----------------------------------------------------------------------
@@ -6355,6 +7537,7 @@ Breaking Changes:
 - Renamed ImFontAtlas::GlyphRangesBuilder to ImFontGlyphRangesBuilder. Kept redirection typedef (will obsolete).
 
 Other Changes:
+
 - Added BETA api for Tab Bar/Tabs widgets: (#261, #351)
   - Added BeginTabBar(), EndTabBar(), BeginTabItem(), EndTabItem(), SetTabItemClosed() API.
   - Added ImGuiTabBarFlags flags for BeginTabBar().
