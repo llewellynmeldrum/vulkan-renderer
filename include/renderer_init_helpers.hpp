@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
-#include "range/v3/view/enumerate.hpp"
 #include "renderer_types.hpp"
 inline bool supports_extension(std::span<vk::ExtensionProperties const> haystack, std::string_view needle) {
     return std::ranges::any_of(
@@ -18,7 +17,7 @@ inline bool supports_extension(std::span<vk::ExtensionProperties const> haystack
 template<typename Pred>
 inline auto find_matching_queue_family(vk::raii::PhysicalDevice physical_device, Pred&& pred) -> std::optional<std::size_t>{
     auto families = physical_device.getQueueFamilyProperties();
-    for (auto const& [idx, family] : ranges::views::enumerate(families)){
+    for (auto const& [idx, family] : std::ranges::views::enumerate(families)){
         if (!(family.queueFlags & vk::QueueFlagBits::eGraphics)){
             continue;
         }

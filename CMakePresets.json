@@ -1,0 +1,48 @@
+{
+  "version": 10,
+  "$comment": "Build types. Each one configures into its own folder, build/<name>.",
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "$comment": "Abstract class if you will",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/gcc-16-toolchain.cmake",
+      "warnings": { "deprecated": false },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "ENABLE_CPPTRACE": "ON",
+        "_TIME_REPORT": "OFF",
+        "_MAX_ERRORS": "0"
+      }
+    },
+    { "name": "dev",   "inherits": "base", "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Debug",
+		"_O0": "ON"
+    }},
+
+    { "name": "cfast", "inherits": "dev",  "cacheVariables": { 
+		"_O2": "ON"
+    }},
+
+    { "name": "fast",  "inherits": "base", "cacheVariables": { 
+		"CMAKE_BUILD_TYPE": "Release",
+		"_O3": "ON",
+        "_FAST_MATH": "ON"
+    }},
+
+    { "name": "asan",  "inherits": "dev",  "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Debug",
+		"_ENABLE_ASAN": "ON",
+		"_O0": "ON"
+    }},
+
+    { "name": "ausan", "inherits": "asan", "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Debug",
+		"_ENABLE_UBSAN": "ON",
+		"_O0": "ON"
+    }}
+  ]
+}

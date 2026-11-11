@@ -1,135 +1,71 @@
+# ===================================================================
 # CMake Wrapper Makefile
-# --------------------------------------------------
-all: run-asan
+# ===================================================================
+APP         := vmc
+SHELL       := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+export CLICOLOR_FORCE := 1
+RELPATH     := 2>&1 | sed "s|$(CURDIR)/||g"
 
-TOOLCHAIN 		:= $(CURDIR)/cmake/llvm-toolchain.cmake
-BUILD_DIR      := build
-BUILD_CFAST     := build-cfast
-BUILD_FAST     := build-fast
-BUILD_ASAN     := build-asan
-BUILD_TSAN     := build-tsan
-BUILD_AUSAN    := build-ausan
+# make -B / make -S, or B=1 / S=N
+MAKE_LETTERS := $(firstword -$(MAKEFLAGS))
+B ?= $(if $(findstring B,$(MAKE_LETTERS)),1)
+S ?= $(if $(findstring S,$(MAKE_LETTERS)),2)
+TOGGLES := $(if $(B),-D_TIME_REPORT=ON) $(if $(S),-D_MAX_ERRORS=$(S))
 
-ASAN_OPTS := detect_leaks=0:color=always:abort_on_error=1:halt_on_error=1
-UBSAN_OPTS := color=always:print_stacktrace=1:halt_on_error=1
+asan_ENV  := ASAN_OPTIONS=detect_leaks=0:color=always:abort_on_error=1:halt_on_error=1
+ausan_ENV := $(asan_ENV) UBSAN_OPTIONS=color=always:print_stacktrace=1:halt_on_error=1
 
-GENERATOR      := Ninja
-CXX            := clang-22
-CC            := clang-22
-APP            := sdltest
+# specifies the default target instead of just picking the first one
+.DEFAULT_GOAL := run
 
-JOBS ?= $(shell sysctl -n hw.logicalcpu 2>/dev/null || nproc)
-BUILD_FLAGS := -j $(JOBS)
+build-%:
+	@cmake --preset $* $(TOGGLES) > /dev/null
+	@cmake --build build/$* $(RELPATH)
 
-CMAKE_COMMON := -G "$(GENERATOR)" \
-	-DCMAKE_TOOLCHAIN_FILE="$(TOOLCHAIN)" \
-  	-DCMAKE_OSX_ARCHITECTURES=arm64 \
-	-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+run-%: build-%
+ifeq ($(B),1)
+	@echo "-B flag set! Compile time diagnostics will be printed."
+endif
+ifeq ($(S),2)
+	@echo "-S flag set! Will fail on the first error."
+endif
+	@$($*_ENV) ./build/$*/$(APP)
 
-.PHONY: help cfast configure build run clean clean-all rebuild \
-        fast run-fast \
-        debug run-debug \
-        asan run-asan \
-        tsan run-tsan \
-        ausan run-ausan \
-        compile-commands
-
-export OPT_LEVEL
-configure: OPT_LEVEL=2
-configure:
-	cmake -S . -B $(BUILD_DIR) $(CMAKE_COMMON) \
-		-DENABLE_CPPTRACE=ON\
-		-D_O2=ON \
-		-DCMAKE_BUILD_TYPE=Debug 
-
-configure-debug:
-	cmake -S . -B $(BUILD_DIR) $(CMAKE_COMMON) \
-		-DCMAKE_BUILD_TYPE=Debug \
-		-D_O0=ON
-
-build: OPT_LEVEL=2
-build: configure
-	cmake --build $(BUILD_DIR) $(BUILD_FLAGS)
-
-run: OPT_LEVEL=2
-run: build
-	cmake --build $(BUILD_DIR) $(BUILD_FLAGS) --target run\
-
-debug: configure-debug
-	cmake --build $(BUILD_DIR) $(BUILD_FLAGS) 
-
-run-debug: debug
-	cmake --build $(BUILD_DIR) $(BUILD_FLAGS) --target debug
-
-# --------------------------------------------------
-
-# c(ompile) fast
-cfast:
-	cmake -S . -B $(BUILD_CFAST) $(CMAKE_COMMON) \
-		-DCMAKE_BUILD_TYPE=Debug\
-		-DENABLE_CPPTRACE=OFF\
-		-D_O2=ON
-
-	cmake --build $(BUILD_CFAST) $(BUILD_FLAGS) --target run
-
-fast:
-	cmake -S . -B $(BUILD_FAST) $(CMAKE_COMMON) \
-		-DENABLE_CPPTRACE=OFF\
-		-DCMAKE_BUILD_TYPE=Relase\
-		-D_O3=ON
-
-	cmake --build $(BUILD_FAST) $(BUILD_FLAGS)
-
-run-fast: OPT_LEVEL=3
-run-fast: fast
-	cmake --build $(BUILD_FAST) $(BUILD_FLAGS) --target run
-
-# --------------------------------------------------
-# Sanitizers
-
-asan:
-	cmake -S . -B $(BUILD_ASAN) $(CMAKE_COMMON) \
-		-DCMAKE_BUILD_TYPE=Debug \
-		-D_ENABLE_ASAN=ON
-	cmake --build $(BUILD_ASAN) $(BUILD_FLAGS)
-
-
-
-tsan:
-	cmake -S . -B $(BUILD_TSAN) $(CMAKE_COMMON) \
-		-DCMAKE_BUILD_TYPE=Debug \
-		-D_ENABLE_TSAN=ON
-	cmake --build $(BUILD_TSAN) $(BUILD_FLAGS)
-
-run-tsan: tsan
-	cmake --build $(BUILD_TSAN) $(BUILD_FLAGS) --target run
-
-ausan:
-	cmake -S . -B $(BUILD_AUSAN) $(CMAKE_COMMON) \
-		-DCMAKE_BUILD_TYPE=Debug \
-		-D_ENABLE_ASAN=ON \
-		-D_ENABLE_UBSAN=ON
-	cmake --build $(BUILD_AUSAN) $(BUILD_FLAGS)
-
-run-asan: asan
-	ASAN_OPTIONS="$(ASAN_OPTS)" cmake --build $(BUILD_ASAN) $(BUILD_FLAGS) --target run
-
-run-ausan: ausan
-	ASAN_OPTIONS="$(ASAN_OPTS)" UBSAN_OPTIONS="$(UBSAN_OPTS)" cmake --build $(BUILD_AUSAN) $(BUILD_FLAGS) --target run
-
-# --------------------------------------------------
-# Utilities
-#
-
-db: configure
-	cp $(BUILD_DIR)/compile_commands.json ./compile_commands.json
-
+build: build-dev
+run:   run-dev
+debug: build-dev
+	lldb -o run -- build/dev/$(APP)
 clean:
-	find $(BUILD_DIR)/CMakeFiles/sdltest.dir/src -name '*.o' -delete 2>/dev/null || true
-	find $(BUILD_DIR)/CMakeFiles/sdltest.dir/src -name '*.o.d' -delete 2>/dev/null || true
-	rm -f bin/$(APP)
-
+	cmake --build build/dev --target clean
 clean-all:
-	rm -rf $(BUILD_DIR) $(BUILD_CFAST) $(BUILD_FAST) $(BUILD_ASAN) $(BUILD_TSAN) $(BUILD_AUSAN) bin
+	rm -rf build
+.PHONY: build run debug clean clean-all help ? h
 
-rebuild: clean build
+?: help
+h: help
+help:
+	@for i in $$(seq $$(tput cols)); do printf "▂"; done
+	@tput sgr0; tput bold;
+	@echo "USAGE:"
+	@tput sgr0;
+	@echo "    make [flags] <target>"
+	@for i in $$(seq $$(tput cols)); do printf "▂"; done
+	@tput sgr0; tput bold; tput sitm;
+	@echo "FLAGS:"
+	@tput sgr0;
+	@echo "    -B (B)enchmark compile time   -> Shows the time taken to compile each file."
+	@echo "    -S (S)ingle error             -> fail outright immediately on the first error."
+	@for i in $$(seq $$(tput cols)); do printf "▂"; done;
+	@tput sgr0; tput bold; tput sitm;
+	@echo "TARGETS:"
+	@tput sgr0;
+	@echo "    build                         -> builds the default flavour (dev)."
+	@echo "    run                           -> builds the default flavour (dev), and runs the executable."
+	@echo '    build-*                       -> builds with a specific flavour (*)'
+	@echo '    run-*                         -> builds with a specific flavour (*), and runs the executable.'
+	@echo "    debug                         -> builds the default flavour (dev), runs your debugger on that."
+	@echo "    clean                         -> clears the build folder for the default flavour (dev)."
+	@echo "    clean-all                     -> clears ALL build folders."
+	@echo "    help                          -> prints this message."
+	@echo ""

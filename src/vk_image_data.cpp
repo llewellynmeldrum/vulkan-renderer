@@ -1,7 +1,6 @@
 #include "vk_image_data.hpp"
 #include "stb_image.hpp"
 #include "logger.hpp"
-#include "range/v3/all.hpp"
 #include "vulkan/vulkan_format_traits.hpp"
 
 u32 ImageData::image_size_bytes() const{
@@ -23,7 +22,7 @@ auto ImageData::from_buffer(
 ) -> ImageData{
     return ImageData {
         .meta = meta,
-        .buf = ranges::to<std::vector<std::byte>>(raw_data),
+        .buf = std::ranges::to<std::vector<std::byte>>(raw_data),
     };
 }
 ImageData ImageData::from_filename(std::string_view filename, bool load_alpha_channel){
@@ -58,7 +57,7 @@ ImageData ImageData::from_filename(std::string_view filename, bool load_alpha_ch
     auto span = std::span(reinterpret_cast<std::byte*>(img_data),n_bytes);
     auto res = ImageData {
         .meta = meta,
-        .buf = ranges::to<std::vector>(span),
+        .buf = std::ranges::to<std::vector>(span),
     };
     stbi_image_free(img_data); // ranges::to<std::vector> created a copy belonging to the object
     return res;

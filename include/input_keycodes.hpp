@@ -4,7 +4,7 @@
 #endif // __cplusplus
 #include "primitive_types.hpp"
 #include "bitmask_flags.hpp"
-#include "common_concepts.hpp"
+#include "concept_helpers.hpp"
 #include <format>
 #include <type_traits>
 #include "assert_shorthands.hpp"
@@ -168,7 +168,7 @@ enum struct KeyCode : u32{
                                    does send code 73, not 117) */
     HOME = 74,
     PAGEUP = 75,
-    DELETE = 76,
+    DEL = 76,
     END = 77,
     PAGEDOWN = 78,
     RIGHT = 79,

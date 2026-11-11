@@ -16,7 +16,7 @@
 #include "gpu_mesh.hpp"
 #include "primitive_types.hpp"
 #include "vk_types.hpp"
-#include "common_concepts.hpp"
+#include "concept_helpers.hpp"
 #include "glm_types.hpp"
 #include "renderer2d_draw_state.hpp"
 #include "vertex_raw_data.hpp"

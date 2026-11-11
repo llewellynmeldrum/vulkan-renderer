@@ -17,7 +17,7 @@
 #include <glm/vec4.hpp>
 #include <vk_mem_alloc.h>
 
-#include "common_concepts.hpp"
+#include "concept_helpers.hpp"
 #include "logger.hpp"
 #include "renderer_concepts.hpp"
 

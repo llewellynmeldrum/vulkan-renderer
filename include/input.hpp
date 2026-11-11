@@ -7,9 +7,11 @@
 #include "glm/vec2.hpp"
 #include "input_keycodes.hpp"
 #include "logger.hpp"
-#include "common_concepts.hpp"
+#include "concept_helpers.hpp"
 #include "enum_map.hpp"
 #include "transformations.hpp"
+
+#include <meta>
 
 
 struct Input{
@@ -59,7 +61,7 @@ public:
     }
 
     bool key_down(KeyCode code) const{
-        return cur.key_down_state[code];
+        return cur.key_down_state.at(code);
     }
     bool modifier_enabled(KeyModBits mod) const{
         return cur.key_mod_state.has(mod);

@@ -7,7 +7,7 @@ add_library(imgui STATIC
     imgui_widgets.cpp
 
     backends/imgui_impl_sdl3.cpp
-    backends/imgui_impl_sdlrenderer3.cpp
+    backends/imgui_impl_vulkan.cpp
     misc/cpp/imgui_stdlib.cpp
 
     imgui_demo.cpp
@@ -30,6 +30,7 @@ target_compile_definitions(imgui
 find_package(SDL3 REQUIRED CONFIG)
 target_link_libraries(imgui PUBLIC
     SDL3::SDL3
+    Vulkan::Vulkan
 )
 # libassert dep
 target_include_directories(imgui PRIVATE

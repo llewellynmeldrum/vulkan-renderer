@@ -186,7 +186,7 @@ make_vk_device_and_queue(
                     .setQueueCreateInfos(queue_create_info)
                     .setPEnabledExtensionNames(device_extensions)
             };
-        } catch (vk::FeatureNotPresentError e){
+        } catch (vk::FeatureNotPresentError const& e){
             LOG_FATAL("PD {} is missing a feature: {}", get_physical_dev_name(physical_device),e.what());
             continue;
         }
@@ -266,7 +266,7 @@ make_swapchain(
     if (surface_has_no_fixed_extent){
         auto const max = caps.maxImageExtent;
         auto const min = caps.minImageExtent;
-        extent = {
+        extent = vk::Extent2D{
             std::clamp(in.extent_px.width, min.width, max.width),
             std::clamp(in.extent_px.height, min.height, max.height)
         };
@@ -418,7 +418,7 @@ make_descriptor_set_layout(
                 .setStageFlags(vk::ShaderStageFlagBits::eFragment)
         },
     };
-    for (i32 i = 0; i<layoutBindings.size(); i++){
+    for (auto i = 0uz; i<layoutBindings.size(); i++){
         layoutBindings[i].setBinding(i);
     }
 
@@ -493,7 +493,7 @@ make_descriptor_sets(
             tex_1.get_write_descriptor_set( *res[frame_idx])
 
         };
-        for (i32 i = 0; i<descriptorWriteSets.size(); i++){
+        for (auto i = 0uz; i<descriptorWriteSets.size(); i++){
             descriptorWriteSets[i].setDstBinding(i);
         }
         m_vkDevice.updateDescriptorSets(

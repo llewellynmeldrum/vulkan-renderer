@@ -340,7 +340,7 @@ struct Renderer {
             return advance_width * scale;
         };
         auto const expected_width = get_glpyh_width('X', 1.0f);
-        for (char glyph = FontAtlas::code_point_begin_idx; glyph < FontAtlas::code_point_end_idx; glyph++){
+        for (auto glyph = FontAtlas::code_point_begin_idx; glyph < FontAtlas::code_point_end_idx; glyph++){
             ASSERT(get_glpyh_width(glyph,1.0f) == expected_width, "Font must be monospaced across accepted glyphs");
         }
 
@@ -357,7 +357,7 @@ struct Renderer {
         
         // 1st step: create a max height texture with no image data ptr provided, so we can just check that padding fits
         auto pack_ranges = std::vector<stbtt_pack_range>(FontAtlas::atlas_size_count);
-        for (i32 size_idx = 0; size_idx< FontAtlas::atlas_size_count; size_idx++){
+        for (auto size_idx = 0uz; size_idx< FontAtlas::atlas_size_count; size_idx++){
             pack_ranges[size_idx] = stbtt_pack_range{
                 .font_size = FontAtlas::atlas_min_height  + FontAtlas::atlas_step * size_idx,
                 .first_unicode_codepoint_in_range = FontAtlas::code_point_begin_idx,

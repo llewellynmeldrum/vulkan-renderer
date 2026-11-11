@@ -1,3 +1,17 @@
+# mc vulkan rewrite (vmc)
+Using everything ive learnt in recent experiments, im rewriting mc from scratch with a focus on distant horizons level scale (LODs), maximum performance with Vulkan, and better abstractions from the start.
+
+I have also created a base for a c++26 based toml serializer and deserializer, which will let me change, load and save values on the fly. Main repo is [here](https://github.com/llewellynmeldrum/cpp26-refl-experiments).
+
+
+# Building
+Non-vendored requirements are: 
+- Vulkan 1.4+ (and obviously an arch+gpu+OS that will run it. Most dev/testing is done on an M1 macbook pro using MoltenVK.)
+- SDL3 
+
+
+
+
 # learning vulkan
 <img width="400" alt="square_vk" src="https://github.com/user-attachments/assets/53c3042d-3524-46f6-9a5f-b68a951bc5ca" />
 

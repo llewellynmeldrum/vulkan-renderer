@@ -10,15 +10,21 @@ template<typename V>
 struct QuadVertices{
     union{
         struct {
-            V m_bot_left{};
-            V m_bot_right{};
-            V m_top_right{};
-            V m_top_left{};
+            V m_bot_left;
+            V m_bot_right;
+            V m_top_right;
+            V m_top_left;
         };
-        std::array<V, 4> m_all;
+        std::array<V, 4> m_all{};
     };
 
-    QuadVertices() = default;
+    // NOTE: What the fuck was i thinking here? this is actual cancer. What the fuck?
+    QuadVertices()
+        :m_bot_left (V{})
+        ,m_bot_right(V{})
+        ,m_top_right(V{})
+        ,m_top_left (V{})
+    {}
     QuadVertices( V bot_left, V bot_right, V top_right, V top_left)
         :m_bot_left (bot_left)
         ,m_bot_right(bot_right)

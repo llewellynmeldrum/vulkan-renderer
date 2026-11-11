@@ -1,4 +1,5 @@
-#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.hpp>
@@ -12,3 +13,4 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.hpp>
 
+#pragma GCC diagnostic pop

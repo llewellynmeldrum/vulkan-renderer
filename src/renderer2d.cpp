@@ -101,7 +101,7 @@ auto Renderer2D::add_text(std::string_view text, glm::vec2 wTopLeft) -> void {
 
     auto pen = glm::vec2{wTopLeft};
     for (auto ch: text){
-        if (ch < font_atlas.code_point_begin_idx || ch > font_atlas.code_point_end_idx){
+        if (static_cast<u32>(ch)  < font_atlas.code_point_begin_idx || static_cast<u32>(ch) > font_atlas.code_point_end_idx){
             ch = '?';
         }
         auto quad_corners = font_atlas.get_glyph_quad_2D(pen,ch,font_size_selection);
@@ -190,7 +190,7 @@ auto Renderer2D::add_glyph_quad(
 auto Renderer2D::add_quad(QuadVertexPositions2D positions, QuadUvPositions2D uv_positions, BitMask shapeID) -> void{
     QuadVertices2D out{};
     auto const& draw_state = get_draw_state();
-    for (int i = 0; i<positions.size(); i++){
+    for (auto i = 0uz; i<positions.size(); i++){
         out[i].pos = positions[i];
         out[i].color = draw_state.fill_color;
         out[i].uv_pos = vtx_raw_data::ccw_quad_verts[i].uv_pos;
@@ -206,7 +206,7 @@ auto Renderer2D::add_quad(QuadVertexPositions2D positions, QuadUvPositions2D uv_
 auto Renderer2D::add_quad(QuadVertexPositions2D positions, BitMask shapeID) -> void {
     QuadVertices2D out{};
     auto const& draw_state = get_draw_state();
-    for (int i = 0; i<positions.size(); i++){
+    for (auto i = 0uz; i<positions.size(); i++){
         out[i].pos = positions[i];
         out[i].color = draw_state.fill_color;
         out[i].uv_pos = vtx_raw_data::ccw_quad_verts[i].uv_pos;

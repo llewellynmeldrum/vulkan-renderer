@@ -36,8 +36,8 @@ CpuMesh3D mesh_heightmap(Heightmap const& heightmap, HeightMapMeshCreateInfo mes
 //    LOG_DBG_EXPR(z_subquad_extent);
     // subquad 0,0: 
     // s0 is at c0
-    for (i32 ix = 0; ix<x_subquad_count; ix++){
-        for (i32 iz = 0; iz<z_subquad_count; iz++){
+    for (auto ix = 0uz; ix<x_subquad_count; ix++){
+        for (auto iz = 0uz; iz<z_subquad_count; iz++){
             auto const x0 = ox + x_subquad_extent * ix;
             auto const x1 = ox + x_subquad_extent * (ix+1);
             auto const z0 = oz + z_subquad_extent * iz;

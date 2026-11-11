@@ -5,7 +5,7 @@
 
 #include "magic_enum.hpp"
 #include "bitmask_flags.hpp"
-#include "common_concepts.hpp"
+#include "concept_helpers.hpp"
 
 namespace magic_enum::ext{
     template<typename E>

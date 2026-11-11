@@ -2,7 +2,7 @@
 #ifndef __cplusplus
 	#error "This header is intended for c++ only."
 #endif // __cplusplus
-#include "common_concepts.hpp"
+#include "concept_helpers.hpp"
 #include "bitfield_helpers.hpp"
 
 

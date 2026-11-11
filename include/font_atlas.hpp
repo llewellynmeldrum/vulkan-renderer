@@ -4,7 +4,6 @@
 #endif // __cplusplus
 
 #include <libassert/assert.hpp>
-#include <range/v3/algorithm/find_if.hpp>
 #include <stb_image_write.hpp>
 #include <stb_truetype.hpp>
 
@@ -65,7 +64,7 @@ struct FontAtlas{
     static constexpr auto atlas_max_height = atlas_min_height + atlas_step * atlas_size_count;
     static consteval std::array<f32,atlas_size_count> compute_atlas_sizes(){
         std::array<f32, atlas_size_count> res{};
-        for (int i = 0; i<atlas_size_count; i++){
+        for (auto i = 0uz; i<atlas_size_count; i++){
             res[i] = atlas_min_height + atlas_step * i;
         }
         return res;
@@ -106,7 +105,7 @@ inline auto FontAtlas::get_glyph_quad_2D(
 inline auto FontAtlas::select_atlas_size(f32 true_font_size) -> FontAtlas::SizeSelection{
     std::optional<f32> selection = std::nullopt;
     i32 selected_idx = FontAtlas::atlas_size_count-1; // fallback to max height
-    for (i32 size_idx = 0; size_idx < FontAtlas::atlas_size_count; size_idx++){
+    for (auto size_idx = 0uz; size_idx < FontAtlas::atlas_size_count; size_idx++){
         auto atlas_size = FontAtlas::atlas_sizes[size_idx];
         if (atlas_size >= true_font_size){
             selection = atlas_size;

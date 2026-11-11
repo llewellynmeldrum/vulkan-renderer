@@ -5,12 +5,25 @@
 #include <utility>
 #include <array>
 #include <initializer_list>
-#include "common_concepts.hpp"
-#include "bitmask_flags.hpp"
-#include "magic_enum.hpp"
-#include "magic_enum_bitmask_flags_ext.hpp"
 
-template<typename K, typename M, size_t size = magic_enum::ext::enum_count<K>()>
+#include "concept_helpers.hpp"
+#include "bitmask_flags.hpp"
+#include "common.hpp"
+#include "meta_helpers.hpp"
+
+namespace detail{
+    template<typename T>
+    consteval auto enum_max() -> std::size_t{
+        auto max_val = 0uz;
+#if CPP26
+        template for (constexpr auto m : std::define_static_array(enumerators_of(^^T))){
+            max_val = std::max(max_val, static_cast<std::size_t>([:m:]));
+        }
+#endif
+        return max_val;
+    }
+};
+template<typename K, typename M, size_t size = detail::enum_max<K>()>
     requires is_enum<K>
 struct EnumMap{
     struct Entry{
