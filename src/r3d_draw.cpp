@@ -19,7 +19,7 @@ auto upload_ubo(
     memcpy(ubo_mapped_memory, &ubo, sizeof(UBO));
 }
 
-auto Renderer::update_ubo(
+auto Renderer3D::update_ubo(
     FrameData const& frame,
     Camera const& cam
 ) -> void {
@@ -32,7 +32,7 @@ auto Renderer::update_ubo(
 }
 
 
-auto Renderer::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf)
+auto Renderer3D::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf)
 -> void
 {
     using std::ranges::contains;
@@ -50,7 +50,7 @@ auto Renderer::set_dynamic_state(vk::raii::CommandBuffer const& cmdBuf)
     );
 
 }
-auto Renderer::prepare_render_attachments(
+auto Renderer3D::prepare_render_attachments(
         vk::raii::CommandBuffer const& cmdBuf,
         u32 imageIndex,
         std::array<f32, 4> clearColor
@@ -134,7 +134,7 @@ void submit_commands(vk::raii::Queue const& q, FrameData const& frame, vk::Semap
     );
 }
 
-auto Renderer::record_commands(
+auto Renderer3D::record_commands(
     Camera const& cam,
     FrameData const& frame,
     u32 imageIndex
@@ -207,7 +207,7 @@ auto Renderer::record_commands(
     cmdBuf.end();
 }
 
-auto Renderer::present_image(
+auto Renderer3D::present_image(
     u32 imageIndex,
     vk::Result acquire_res
 )
@@ -244,7 +244,7 @@ auto acquireNextImage(Swapchain const& swapchain, FrameData const& frame){
     return AcquiredImage{imageIndex, res};
 }
 
-auto Renderer::draw(
+auto Renderer3D::draw(
     Camera const& cam
 ) -> void{
     auto const& frame = get_current_frame();

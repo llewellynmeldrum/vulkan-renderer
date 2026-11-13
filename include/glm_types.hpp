@@ -2,9 +2,8 @@
 #ifndef __cplusplus
 	#error "This header is intended for c++ only."
 #endif // __cplusplus
-//#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-//#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "primitive_types.hpp"
 
 struct vec2xz{

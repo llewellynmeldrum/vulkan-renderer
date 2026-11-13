@@ -32,26 +32,28 @@
 #include "renderer_types.hpp"
 
 
-void Renderer::init(SDL_Window* window, glm::uvec2 window_extent) {
-    m_pixelSize = SDL_GetWindowPixelDensity(window);
-    m_rendContext.window = window;
-    m_rendContext.windowLogicalExtent = {window_extent.x,window_extent.y};
-    m_rendContext.windowPixelExtent = logical_to_pixel(m_rendContext.windowLogicalExtent);
+Renderer3D::Renderer3D(SDL_Window* window, glm::vec2 window_extent, f32 pixel_density)
+    : m_rendContext(
+        window,
+        window_extent,
+        window_extent * pixel_density
+    )
+    ,m_pixelDensity(pixel_density)
+{
     LOG_INFO("INITIALIZING RENDERER ({})", static_cast<void*>(this));
-
     try{
         init_vulkan();
         init_imgui();
-    }catch(vk::SystemError const& e){
-        LOG_FATAL("Failed to initialize vulkan: {}", e.what());
+    } catch(vk::SystemError const& e){
+        LOG_FATAL("Failed to initialize vulkan, threw: {}", e.what());
     }
 }
 
 
-void Renderer::init_vulkan() {
+void Renderer3D::init_vulkan() {
     //clang-format off
     {
-        auto ctx = detail::make_vk_instance(k_useValidationLayers, m_gpuContext.context, k_API_VER);
+        auto ctx = detail::make_vk_instance(k_useValidationLayers, m_gpuContext.context, k_apiVersion);
         m_gpuContext.instance = std::move(ctx.m_vkInstance);
         m_gpuContext.debugMessenger = std::move(ctx.m_vkDebugMessenger);
     }
@@ -61,7 +63,7 @@ void Renderer::init_vulkan() {
     }
 
     {
-        auto ctx = detail::make_vk_device_and_queue(m_gpuContext.instance,m_gpuContext.surface, k_API_VER);
+        auto ctx = detail::make_vk_device_and_queue(m_gpuContext.instance,m_gpuContext.surface, k_apiVersion);
         m_gpuContext.physicalDevice = std::move(ctx.m_vkPhysicalDevice);
         m_gpuContext.device         = std::move(ctx.m_vkDevice);
         m_gpuContext.queue          = std::move(ctx.m_vkQueue);
@@ -100,12 +102,6 @@ void Renderer::init_vulkan() {
     {
         init_texture(); 
     }
-    {
-        m_rend2d.init();
-        m_rend2d.font_atlas = make_font_atlas(
-            "./fonts/basis33/basis33.ttf"
-        );
-    }
 
     {
         m_depthImage = DepthAttachment::make(
@@ -124,7 +120,6 @@ void Renderer::init_vulkan() {
             m_gpuContext.descriptorSetLayout,
             m_rendContext.inflightFrames,
             m_texture,
-            m_rend2d.font_atlas.atlas_texture,
             k_syncFrameCount
         );
     }
@@ -255,7 +250,7 @@ auto make_shader_pipeline(PipelineCreateInfo info)
     }
     return pipeline;
 }
-void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
+void Renderer3D::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
     m_line_pipeline = make_shader_pipeline<Vertex3D, PushConstants::ModelMatrix>(
         PipelineCreateInfo {
             .pipeline_name           = "main_line",
@@ -282,7 +277,7 @@ void Renderer::init_line_pipeline(detail::helpers::ShaderModuleWrapper const& sh
 
 }
 
-auto Renderer::init_voxel_dda_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
+auto Renderer3D::init_voxel_dda_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
 -> void{
     m_voxel_dda_pipeline = make_shader_pipeline<
         Vertex2D, // vertex type 
@@ -312,7 +307,7 @@ auto Renderer::init_voxel_dda_pipeline(detail::helpers::ShaderModuleWrapper cons
     );
 
 }
-auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
+auto Renderer3D::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
 -> void{
     m_2d_pipeline = make_shader_pipeline<
         Vertex2D, // vertex type 
@@ -343,7 +338,7 @@ auto Renderer::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shad
 
 }
 
-void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
+void Renderer3D::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {
     m_fill_pipeline = make_shader_pipeline<Vertex3D, PushConstants::ModelMatrix>(
         PipelineCreateInfo{
             .pipeline_name           = "main_fill",
@@ -369,7 +364,7 @@ void Renderer::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& sh
 }
 
 
-void Renderer::init_sync_structures() {
+void Renderer3D::init_sync_structures() {
     int frame_idx = 0;
     for (auto& frame : m_rendContext.inflightFrames) {
         // Fences are cpu<->gpu. 
@@ -391,7 +386,7 @@ void Renderer::init_sync_structures() {
 }
 
 
-void Renderer::init_texture() {
+void Renderer3D::init_texture() {
     // all i need is to be able to supply texture2D's pctor with a function it can call
     m_texture = make_texture_2d( "./textures/tim_cheese.png");
 }

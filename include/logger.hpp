@@ -16,15 +16,11 @@ inline constexpr void LOG_STR(
     std::string const& body_style="", 
     std::string const& body=""
 ){
-    std::println("{}{}[{:4.2f}]{}: {}{}{}",
-                 title_style,
-                 title,
-                 timer::get_seconds(timer::since_epoch()),
-                 style::reset(),
-                 body_style,
-                 body,
-                 style::reset()
-                 );
+    std::println(
+        "{}{}{} : {}{}{}",
+        title_style, title, style::reset(), 
+        body_style, body, style::reset()
+   );
 }
 template <class... _Args>
 inline constexpr void LOG_EXIT(int code) {

@@ -6,8 +6,8 @@ int main() {
     cpptrace::register_terminate_handler();
     {
         auto engine = Engine{};
-        engine.init();
-        engine.run();
-        engine.cleanup();
+        while (engine.should_run()) {
+            engine.loop();
+        }
     }
 }

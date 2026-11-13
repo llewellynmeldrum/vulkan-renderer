@@ -1,5 +1,5 @@
 #include "renderer.hpp"
-auto Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) const -> void
+auto Renderer3D::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) const -> void
 {
     cmdBuf.end();
     m_gpuContext.queue.submit(
@@ -10,7 +10,7 @@ auto Renderer::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) const -> voi
 }
 
 auto 
-Renderer::begin_single_use_cmd() 
+Renderer3D::begin_single_use_cmd() 
 const -> vk::raii::CommandBuffer
 {
     auto cmdBuf =  std::move(vk::raii::CommandBuffers(

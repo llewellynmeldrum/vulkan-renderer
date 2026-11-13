@@ -40,7 +40,7 @@ ENABLE_ENUM_BITWISE(KeyModBits)
 
 
 enum struct KeyCode : u32{
-    UNKNOWN = 0,
+    NONE = 0,
 
     /**
      *  \name Usage page 0x07
@@ -425,3 +425,327 @@ static consteval inline std::string_view to_string(u32 val){
     ASSERT(val < static_cast<u32>(KeyCode::COUNT));
     return detail::name_table[val];
 }
+
+
+
+enum struct MouseButtonCode : u8{
+    M1,
+    M2,
+    M3,
+};
+enum struct ButtonCode: i32{
+    NONE = 0,
+    MB_1 = 1, // left click
+    MB_2 = 2, // right click
+    MB_3 = 2, // scroll bar click
+    KEY_A = 4,
+    KEY_B = 5,
+    KEY_C = 6,
+    KEY_D = 7,
+    KEY_E = 8,
+    KEY_F = 9,
+    KEY_G = 10,
+    KEY_H = 11,
+    KEY_I = 12,
+    KEY_J = 13,
+    KEY_K = 14,
+    KEY_L = 15,
+    KEY_M = 16,
+    KEY_N = 17,
+    KEY_O = 18,
+    KEY_P = 19,
+    KEY_Q = 20,
+    KEY_R = 21,
+    KEY_S = 22,
+    KEY_T = 23,
+    KEY_U = 24,
+    KEY_V = 25,
+    KEY_W = 26,
+    KEY_X = 27,
+    KEY_Y = 28,
+    KEY_Z = 29,
+
+    KEY_ONE = 30,
+    KEY_TWO = 31,
+    KEY_THREE = 32,
+    KEY_FOUR= 33,
+    KEY_FIVE = 34,
+    KEY_SIX = 35,
+    KEY_SEVEN= 36,
+    KEY_EIGHT= 37,
+    KEY_NINE = 38,
+    KEY_ZERO = 39,
+
+    KEY_RETURN = 40,
+    KEY_ESCAPE = 41,
+    KEY_BACKSPACE = 42,
+    KEY_TAB = 43,
+    KEY_SPACE = 44,
+
+    KEY_MINUS = 45,
+    KEY_EQUALS = 46,
+    KEY_LEFTBRACKET = 47,
+    KEY_RIGHTBRACKET = 48,
+    KEY_BACKSLASH = 49,
+    KEY_NONUSHASH = 50, 
+    KEY_SEMICOLON = 51,
+    KEY_APOSTROPHE = 52,
+    KEY_GRAVE = 53, 
+	KEY_COMMA = 54,
+	KEY_PERIOD = 55,
+	KEY_SLASH = 56,
+	KEY_CAPSLOCK = 57,
+	KEY_F1 = 58,
+	KEY_F2 = 59,
+	KEY_F3 = 60,
+	KEY_F4 = 61,
+	KEY_F5 = 62,
+	KEY_F6 = 63,
+	KEY_F7 = 64,
+	KEY_F8 = 65,
+	KEY_F9 = 66,
+	KEY_F10 = 67,
+	KEY_F11 = 68,
+	KEY_F12 = 69,
+
+	KEY_PRINTSCREEN = 70,
+	KEY_SCROLLLOCK = 71,
+	KEY_PAUSE = 72,
+	KEY_INSERT = 73, 
+	KEY_HOME = 74,
+	KEY_PAGEUP = 75,
+	KEY_DEL = 76,
+	KEY_END = 77,
+	KEY_PAGEDOWN = 78,
+	KEY_RIGHT = 79,
+	KEY_LEFT = 80,
+	KEY_DOWN = 81,
+	KEY_UP = 82,
+
+	KEY_NUMLOCKCLEAR = 83, 
+	KP_DIVIDE = 84,
+	KP_MULTIPLY = 85,
+	KP_MINUS = 86,
+	KP_PLUS = 87,
+	KP_ENTER = 88,
+	KP_1 = 89,
+	KP_2 = 90,
+	KP_3 = 91,
+	KP_4 = 92,
+	KP_5 = 93,
+	KP_6 = 94,
+	KP_7 = 95,
+	KP_8 = 96,
+	KP_9 = 97,
+	KP_0 = 98,
+	KP_PERIOD = 99,
+
+	KEY_NONUSBACKSLASH = 100, /**< This is the additional key that ISO keyboards have over ANSI ones, located between left shift and Z. Produces GRAVE ACCENT and TILDE in a US or UK Mac layout, REVERSE SOLIDUS (backslash) and VERTICAL LINE in a US or UK Windows layout, and LESS-THAN SIGN and GREATER-THAN SIGN in a Swiss German, German, or French layout. */
+	KEY_APPLICATION = 101, /**< windows contextual menu, compose */
+	KEY_POWER = 102, /**< The USB document says this is a status flag,
+                               *   not a physical key - but some Mac keyboards
+                               *   do have a power key. */
+	KP_EQUALS = 103,
+	KEY_F13 = 104,
+	KEY_F14 = 105,
+	KEY_F15 = 106,
+	KEY_F16 = 107,
+	KEY_F17 = 108,
+	KEY_F18 = 109,
+	KEY_F19 = 110,
+	KEY_F20 = 111,
+	KEY_F21 = 112,
+	KEY_F22 = 113,
+	KEY_F23 = 114,
+	KEY_F24 = 115,
+
+    EXECUTE = 116,
+    HELP = 117,    /**< AL Integrated Help Center */
+    MENU = 118,    /**< Menu (show menu) */
+    SELECT = 119,
+    STOP = 120,    /**< AC Stop */
+    AGAIN = 121,   /**< AC Redo/Repeat */
+    UNDO = 122,    /**< AC Undo */
+    CUT = 123,     /**< AC Cut */
+    COPY = 124,    /**< AC Copy */
+    PASTE = 125,   /**< AC Paste */
+    FIND = 126,    /**< AC Find */
+    MUTE = 127,
+    VOLUMEUP = 128,
+    VOLUMEDOWN = 129,
+/* not sure whether there's a reason to enable these */
+/*     LOCKINGCAPSLOCK = 130,  */
+/*     LOCKINGNUMLOCK = 131, */
+/*     LOCKINGSCROLLLOCK = 132, */
+    KP_COMMA = 133,
+    KP_EQUALSAS400 = 134,
+
+    INTERNATIONAL1 = 135, /**< used on Asian keyboards, see
+                                            footnotes in USB doc */
+    INTERNATIONAL2 = 136,
+    INTERNATIONAL3 = 137, /**< Yen */
+    INTERNATIONAL4 = 138,
+    INTERNATIONAL5 = 139,
+    INTERNATIONAL6 = 140,
+    INTERNATIONAL7 = 141,
+    INTERNATIONAL8 = 142,
+    INTERNATIONAL9 = 143,
+    LANG1 = 144, /**< Hangul/English toggle */
+    LANG2 = 145, /**< Hanja conversion */
+    LANG3 = 146, /**< Katakana */
+    LANG4 = 147, /**< Hiragana */
+    LANG5 = 148, /**< Zenkaku/Hankaku */
+    LANG6 = 149, /**< reserved */
+    LANG7 = 150, /**< reserved */
+    LANG8 = 151, /**< reserved */
+    LANG9 = 152, /**< reserved */
+
+    ALTERASE = 153,    /**< Erase-Eaze */
+    SYSREQ = 154,
+    CANCEL = 155,      /**< AC Cancel */
+    CLEAR = 156,
+    PRIOR = 157,
+    RETURN2 = 158,
+    SEPARATOR = 159,
+    OUT = 160,
+    OPER = 161,
+    CLEARAGAIN = 162,
+    CRSEL = 163,
+    EXSEL = 164,
+
+    KP_00 = 176,
+    KP_000 = 177,
+    THOUSANDSSEPARATOR = 178,
+    DECIMALSEPARATOR = 179,
+    CURRENCYUNIT = 180,
+    CURRENCYSUBUNIT = 181,
+    KP_LEFTPAREN = 182,
+    KP_RIGHTPAREN = 183,
+    KP_LEFTBRACE = 184,
+    KP_RIGHTBRACE = 185,
+    KP_TAB = 186,
+    KP_BACKSPACE = 187,
+    KP_A = 188,
+    KP_B = 189,
+    KP_C = 190,
+    KP_D = 191,
+    KP_E = 192,
+    KP_F = 193,
+    KP_XOR = 194,
+    KP_POWER = 195,
+    KP_PERCENT = 196,
+    KP_LESS = 197,
+    KP_GREATER = 198,
+    KP_AMPERSAND = 199,
+    KP_DBLAMPERSAND = 200,
+    KP_VERTICALBAR = 201,
+    KP_DBLVERTICALBAR = 202,
+    KP_COLON = 203,
+    KP_HASH = 204,
+    KP_SPACE = 205,
+    KP_AT = 206,
+    KP_EXCLAM = 207,
+    KP_MEMSTORE = 208,
+    KP_MEMRECALL = 209,
+    KP_MEMCLEAR = 210,
+    KP_MEMADD = 211,
+    KP_MEMSUBTRACT = 212,
+    KP_MEMMULTIPLY = 213,
+    KP_MEMDIVIDE = 214,
+    KP_PLUSMINUS = 215,
+    KP_CLEAR = 216,
+    KP_CLEARENTRY = 217,
+    KP_BINARY = 218,
+    KP_OCTAL = 219,
+    KP_DECIMAL = 220,
+    KP_HEXADECIMAL = 221,
+
+    LCTRL = 224,
+    LSHIFT = 225,
+    LALT = 226, /**< alt, option */
+    LGUI = 227, /**< windows, command (apple), meta */
+    RCTRL = 228,
+    RSHIFT = 229,
+    RALT = 230, /**< alt gr, option */
+    RGUI = 231, /**< windows, command (apple), meta */
+    MODE = 257,    /**< I'm not sure if this is really not covered
+                                 *   by any of the above, but since there's a
+                                 *   special SDL_KMOD_MODE for it I'm adding it here
+                                 */
+
+    /* @} *//* Usage page 0x07 */
+
+    /**
+     *  \name Usage page 0x0C
+     *
+     *  These values are mapped from usage page 0x0C (USB consumer page).
+     *
+     *  There are way more keys in the spec than we can represent in the
+     *  current scancode range, so pick the ones that commonly come up in
+     *  real world usage.
+     */
+    /* @{ */
+
+    SLEEP = 258,                   /**< Sleep */
+    WAKE = 259,                    /**< Wake */
+
+    CHANNEL_INCREMENT = 260,       /**< Channel Increment */
+    CHANNEL_DECREMENT = 261,       /**< Channel Decrement */
+
+    MEDIA_PLAY = 262,          /**< Play */
+    MEDIA_PAUSE = 263,         /**< Pause */
+    MEDIA_RECORD = 264,        /**< Record */
+    MEDIA_FAST_FORWARD = 265,  /**< Fast Forward */
+    MEDIA_REWIND = 266,        /**< Rewind */
+    MEDIA_NEXT_TRACK = 267,    /**< Next Track */
+    MEDIA_PREVIOUS_TRACK = 268, /**< Previous Track */
+    MEDIA_STOP = 269,          /**< Stop */
+    MEDIA_EJECT = 270,         /**< Eject */
+    MEDIA_PLAY_PAUSE = 271,    /**< Play / Pause */
+    MEDIA_SELECT = 272,        /* Media Select */
+
+    AC_NEW = 273,              /**< AC New */
+    AC_OPEN = 274,             /**< AC Open */
+    AC_CLOSE = 275,            /**< AC Close */
+    AC_EXIT = 276,             /**< AC Exit */
+    AC_SAVE = 277,             /**< AC Save */
+    AC_PRINT = 278,            /**< AC Print */
+    AC_PROPERTIES = 279,       /**< AC Properties */
+
+    AC_SEARCH = 280,           /**< AC Search */
+    AC_HOME = 281,             /**< AC Home */
+    AC_BACK = 282,             /**< AC Back */
+    AC_FORWARD = 283,          /**< AC Forward */
+    AC_STOP = 284,             /**< AC Stop */
+    AC_REFRESH = 285,          /**< AC Refresh */
+    AC_BOOKMARKS = 286,        /**< AC Bookmarks */
+
+    /* @} *//* Usage page 0x0C */
+
+
+    /**
+     *  \name Mobile keys
+     *
+     *  These are values that are often used on mobile phones.
+     */
+    /* @{ */
+
+    SOFTLEFT = 287, /**< Usually situated below the display on phones and
+                                      used as a multi-function feature key for selecting
+                                      a software defined function shown on the bottom left
+                                      of the display. */
+    SOFTRIGHT = 288, /**< Usually situated below the display on phones and
+                                       used as a multi-function feature key for selecting
+                                       a software defined function shown on the bottom right
+                                       of the display. */
+    CALL = 289, /**< Used for accepting phone calls. */
+    ENDCALL = 290, /**< Used for rejecting phone calls. */
+
+    /* @} *//* Mobile keys */
+
+    /* Add any other keys here. */
+
+    RESERVED = 400,    /**< 400-500 reserved for dynamic keycodes */
+
+    COUNT = 512 /**< not a key, just marks the number of scancodes for array bounds */
+};

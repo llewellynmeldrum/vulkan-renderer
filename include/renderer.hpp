@@ -18,56 +18,55 @@
 #include <stb_rect_pack.hpp>
 #include <stb_truetype.hpp>
 
-
 FWD_DECL_STRUCT(SDL_Window);
 FWD_DECL_STRUCT(SDL_KeyboardEvent);
-struct Renderer {
+
+struct GpuContext{
+    u32                                  queueFamily{};
+    vk::raii::Context                    context{};
+    vk::raii::Instance                   instance{nullptr};
+    vk::raii::DebugUtilsMessengerEXT     debugMessenger{nullptr};
+    vk::raii::SurfaceKHR                 surface{nullptr};
+
+    vk::raii::PhysicalDevice             physicalDevice{nullptr};
+    vk::raii::Device                     device{nullptr};
+    vk::raii::Queue                      queue{nullptr};
+
+    Swapchain                            swapchain{};
+
+    vk::raii::DescriptorPool             descriptorPool{nullptr};
+    vk::raii::DescriptorSetLayout        descriptorSetLayout{nullptr};
+    std::vector<vk::raii::DescriptorSet> descriptorSets;                // indexed by frame
+    
+    // blocks thread until the gpu is idle 
+    auto await_idle() const -> void{
+        device.waitIdle();
+    }
+};
+struct RenderContext{ 
+    SDL_Window*                          window{};
+    glm::vec2                            windowLogicalExtent;
+    glm::vec2                            windowPixelExtent;
+    std::vector<FrameData>               inflightFrames{};
+    u32                                  frameCount{0};
+    glm::vec2                            viewportOffset {0.0f,0.0f};
+    bool                                 requiresSwapchainRecreation{};
+};
+
+struct Renderer3D {
   public:
+    Renderer3D(SDL_Window* window, glm::vec2 window_extent, f32 pixel_density);
+    
     static constexpr auto                k_shader_spirv_path = "shaders/bin/main_shaders.spv"sv;
-    static constexpr auto                k_guiMainScale = 1.5f;
     static constexpr u32                 k_syncFrameCount = 2;
-    static constexpr u32                 k_API_VER = vk::ApiVersion13;
+    static constexpr u32                 k_apiVersion = vk::ApiVersion13;
     static constexpr bool                k_useValidationLayers{true};
 
 
 
-    struct GpuContext{
-        u32                                  queueFamily{};
-        vk::raii::Context                    context{};
-        vk::raii::Instance                   instance{nullptr};
-        vk::raii::DebugUtilsMessengerEXT     debugMessenger{nullptr};
-        vk::raii::SurfaceKHR                 surface{nullptr};
-
-        vk::raii::PhysicalDevice             physicalDevice{nullptr};
-        vk::raii::Device                     device{nullptr};
-        vk::raii::Queue                      queue{nullptr};
-
-        Swapchain                            swapchain{};
-
-        vk::raii::DescriptorPool             descriptorPool{nullptr};
-        vk::raii::DescriptorSetLayout        descriptorSetLayout{nullptr};
-        std::vector<vk::raii::DescriptorSet> descriptorSets; // indexed by frame
-        
-        // blocks thread until the gpu is idle 
-        auto await_idle() const -> void{
-            device.waitIdle();
-        }
-    };
-    GpuContext m_gpuContext;
-    // handles 
-    RaiiVmaAllocator                    m_allocator{nullptr};
-
-    // primitive types
-    struct RenderContext{ 
-        SDL_Window*                          window{};
-        std::vector<FrameData>               inflightFrames{};
-        u32                                  frameCount{0};
-        glm::vec2                            windowLogicalExtent;
-        glm::vec2                            windowPixelExtent;
-        glm::vec2                            viewportOffset {0.0f,0.0f};
-        bool                                 requiresSwapchainRecreation{};
-    };
-    RenderContext m_rendContext;
+    GpuContext              m_gpuContext;
+    RaiiVmaAllocator        m_allocator{nullptr};
+    RenderContext           m_rendContext;
 
 
 
@@ -104,20 +103,16 @@ struct Renderer {
     template<typename tVertexType, typename tIndexType>
     auto make_gpu_mesh_impl(CpuMesh<tVertexType,tIndexType> const& cpu_mesh) -> GpuMesh<tVertexType,tIndexType>;
 
-    Renderer2D                           m_rend2d;
     using ShaderModuleWrapper = detail::helpers::ShaderModuleWrapper;
     auto init_fill_pipeline     (ShaderModuleWrapper const& shader) -> void;
     auto init_line_pipeline     (ShaderModuleWrapper const& shader) -> void;
     auto init_2d_pipeline       (ShaderModuleWrapper const& shader) -> void;
     auto init_voxel_dda_pipeline(ShaderModuleWrapper const& shader) -> void;
 
-    // dynamic vulkan state
 
-    auto get_framebuffer_size() const noexcept
-    -> vk::Extent2D;
+    auto get_framebuffer_size() const noexcept -> vk::Extent2D;
 
-    auto toggle_wireframe()
-    -> void;
+    auto toggle_wireframe() -> void;
 
 
     auto prepare_render_attachments(
@@ -138,7 +133,7 @@ struct Renderer {
     -> void;
 
 
-    auto& get_current_frame(this auto& self) {
+    auto get_current_frame(this auto& self) -> FrameData&{
         return self.m_rendContext.inflightFrames.at(self.get_current_frame_index());
     }
 
@@ -166,7 +161,7 @@ struct Renderer {
 
     
 
-    auto handle_window_resize(glm::vec2 new_logical_extent) -> void;
+    auto update_window_extent(glm::vec2 new_logical_extent) -> void;
         
     auto copy_buffer(
         vk::Buffer const & src,
@@ -217,7 +212,7 @@ struct Renderer {
     static constexpr f32 k_depthMax {1.0f};
     static constexpr f32 k_depthFar {0.0f};
     static constexpr f32 k_depthNear{1.0f};
-    f32 m_pixelSize;
+    f32 m_pixelDensity;
     auto make_texture_2d(
         ImageData const& img_data,
         vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal
@@ -463,7 +458,7 @@ struct Renderer {
 
 
     glm::vec2 ndc_to_logical(glm::vec2 pNdc) const{ return detail::ndc_to_logical(pNdc, m_rendContext.windowLogicalExtent);}
-    glm::vec2 logical_to_pixel(glm::vec2 pLogical) const{ return detail::logical_to_pixel(pLogical,m_pixelSize);}
-    glm::vec2 pixel_to_logical(glm::vec2 pPixel) const{ return detail::pixel_to_logical(pPixel,m_pixelSize);}
+    glm::vec2 logical_to_pixel(glm::vec2 pLogical) const{ return detail::logical_to_pixel(pLogical,m_pixelDensity);}
+    glm::vec2 pixel_to_logical(glm::vec2 pPixel) const{ return detail::pixel_to_logical(pPixel,m_pixelDensity);}
 };
 

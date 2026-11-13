@@ -1,57 +1,30 @@
 #pragma once
 
-#include "glm/detail/qualifier.hpp"
-#include "glm/ext/matrix_float4x4.hpp"
-#include "primitive_types.hpp"
 #include <format>
 #include <type_traits>
+#include "glm/detail/qualifier.hpp"
+#include "glm/gtc/type_ptr.hpp"
+#include "glm/ext/matrix_float4x4.hpp"
+#include "primitive_types.hpp"
 
-
-// TODO: 
-// Honestly, each of these should live in their respective headers. Having them all in one header forces recompile on 
-// literally any changes to any formatter.
-template<glm::length_t L, typename T, glm::qualifier Q> 
+template<glm::length_t L, typename T, glm::qualifier Q>
 struct std::formatter<glm::vec<L,T,Q>>{
-    using vec_t = glm::vec<L,T,Q>;
-
-	constexpr auto parse(std::format_parse_context& ctx){return ctx.begin();}
-	auto format(vec_t const& val, auto& ctx)const {
-        std::string res{""};
-        for (glm::length_t i = 0; i<L; i++){
-            res += std::format("{}", val[i]);
-            if (i<L-1)
-            res += std::format(", ", val[i]);
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+    constexpr auto format(const glm::vec<L,T,Q>& obj, auto& ctx) const noexcept{
+        std::format_to(ctx.out(),"{}", "{{");
+        auto first = true;
+        for (const auto& v : std::span(glm::value_ptr(obj),L)){
+            if (!first){
+                std::format_to(ctx.out(),", ");
+            }
+            std::format_to(ctx.out(),"{}", v);
+            first = false;
         }
-        return std::format_to(ctx.out(), "[{}]",res);
+        std::format_to(ctx.out(),"{}", "}}");
     }
 };
-
-// template<size_t t_storage_offset, size_t t_n_bits, typename t_storage_type>
-// struct std::formatter<BitFieldMember<t_storage_offset, t_n_bits,t_storage_type>>{
-//     using T = BitFieldMember<t_storage_offset, t_n_bits,t_storage_type>;
-// 
-//     bool binary = false;
-// 	constexpr auto parse(std::format_parse_context& ctx){
-//         auto it = ctx.begin();
-// 
-//         if (it != ctx.end() && *it == 'b') {
-//             binary = true;
-//             ++it;
-//         }
-// 
-//         if (it != ctx.end() && *it != '}')
-//             throw format_error{"invalid POD format specifier"};
-// 
-//         return it;
-//     }
-// 	auto format(T const& val, auto& ctx)const {
-//         std::string res{""};
-//         if (binary)
-//             return std::format_to(ctx.out(), "[{}]",res);
-//         else
-//             return std::format_to(ctx.out(), "[{}]",val.get);
-//     }
-// };
 
 template<glm::length_t C, glm::length_t R, typename T, glm::qualifier Q>
 struct std::formatter<glm::mat<C,R,T,Q>>{

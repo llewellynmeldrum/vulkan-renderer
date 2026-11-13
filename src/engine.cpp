@@ -1,87 +1,184 @@
-#include "engine.hpp"
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL.h"
-#include "SDL3/SDL_oldnames.h"
-#include "color_utils.hpp"
-#include "magic_enum.hpp"
+#include <list>
 #include <print>
-auto Engine::get_instance() -> Engine*{
-    ASSERT(instance, "Engine instance requested prior to init().");
-    return Engine::instance;
-}
+#include <utility>
+#include <variant>
+#include <span>
 
-auto Engine::init() -> void{
-    if (instance){
-        LOG_FATAL("Double initialization breh");
+#include "glm_types.hpp"
+#include "engine.hpp"
+#include "Engine_Events.hpp"
+#include "Engine_Gui.hpp"
+
+#include "color_utils.hpp"
+#include "timer.hpp"
+#include "auto_format.hpp"
+
+#include "format_specs.hpp"
+
+namespace Direction3{
+    static constexpr auto Forward   =   glm::vec3{ 0.0f,  0.0f, -1.0f};
+    static constexpr auto Backward  =   glm::vec3{ 0.0f,  0.0f, +1.0f};
+    static constexpr auto Left      =   glm::vec3{-1.0f,  0.0f,  1.0f};
+    static constexpr auto Right     =   glm::vec3{+1.0f,  0.0f,  0.0f};
+    static constexpr auto Up        =   glm::vec3{ 1.0f, +1.0f,  0.0f};
+    static constexpr auto Down      =   glm::vec3{ 0.0f, -1.0f,  1.0f};
+};
+void apply_actions_to_camera(std::span<Action const> actions, Camera & cam, f64 dt_s){
+    // since dt is in seconds, the scale of the action is essentially the 'units per second'.
+    for (auto const& act: actions){
+        LOG_DBG(
+            "Applying action '{}', {} {}",
+            act.type,
+            act.delta2==glm::vec2{0,0} ? "" : std::format("{}, ", act.delta2),
+            act.delta3==glm::vec3{0,0,0} ? "" : std::format("{}", act.delta3)
+        );
+        auto scale = dt_s;
+        switch (act.type){
+            case ActionType::MoveCamera:   cam.move(act.get_delta3(), scale);       break;
+
+            case ActionType::LookAround:   cam.look_around(act.get_delta2()); break;
+
+            case ActionType::ZoomIn:       cam.zoom_in(scale);          break;
+            case ActionType::ZoomOut:      cam.zoom_out(scale);          break;
+        }
     }
-    Engine::instance = this;
-    static constexpr auto initialWindowLogicalExtent = glm::ivec2{
-        1280,720
-    };
-    platform.init(initialWindowLogicalExtent );
-    input.init(platform.get_window_handle(), initialWindowLogicalExtent);
-    rend.init(platform.get_window_handle(),initialWindowLogicalExtent);
-    world.init();
-
-
-
-    upload_heightmap(world.m_heightmap);
-    auto const mid = rend.m_rendContext.windowLogicalExtent /2.0f ;
-    rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(0,255,0,255) });
-    // screen center should be top left, with length of 200 lpx (logical pixels)
-//    rend.m_rend2d.add_rect(mid + glm::vec2{-200,-200}, glm::vec2(400.0f));
-
-    rend.m_rend2d.set_draw_state( { .fill_color = make_rgba(255,128,0,255) });
-//    static constexpr size_t circle_count = 2;
-
-    rend.m_rend2d.add_circle(mid, 200.0f);
-    rend.m_rend2d.set_draw_state( { 
-        .fill_color = make_rgba(255,200,255,255),
-        .font_height = 128.0f,
-    });
-    rend.m_rend2d.add_text("Hello World", mid);
-    rend.upload_mesh2d();
 }
-
-void Engine::cleanup(){
-    ASSERT(instance, "cleanup() called before init()" );
-    rend.cleanup();
-    platform.cleanup();
-
-}
-void Engine::run(){
-    using namespace std::chrono_literals;
-    while (!m_shouldQuit) {
-        poll_events();
-        handle_input_actions();
-        if (m_windowResized){
-            handle_window_resize();
+struct ToggleButtonBind{
+    ButtonCode button;
+    Action action;
+    auto operator()(InputState const& in)const -> std::optional<Action>{
+        if (in.just_pressed(button)){
+            return action;
+        }else{
+            return {};
         }
-        if (!m_worldUpdatesPaused){
-            world.per_frame_update();
+    }
+};
+
+struct HoldButtonBind{
+    ButtonCode button;
+    Action action;
+    auto operator()(InputState const& in)const -> std::optional<Action>{
+        if (in.is_down(button)){
+            return action;
+        }else{
+            return {};
         }
-        if (m_shouldRender) {
-            ui_draw();
-            rend.draw(cam);
-           // use sdl builtins and draw a circle, have a define mode or something to switch to 2d, or just make a new project really quickk (better idea) SDL_RenderRect(SDL_GetRendererr) ;
+    }
+};
+// for things like mouse movement, we need to evaluate the input state and see what the mouse delta is 
+struct MouseMoveBind{
+    auto operator()(InputState const& in) const-> std::optional<Action>{
+        if (in.mouse_moved()){
+            return Action{
+                .type = ActionType::LookAround,
+                .delta2 = in.mouse_movement_rel()
+            };
         } else{
-            std::this_thread::sleep_for(100ms);
+            return {};
+        }
+    }
+};
+template<typename T>
+concept is_bind_object = requires(T const & bind, InputState const& in){
+    {bind(in)} -> std::same_as<std::optional<Action>>;
+};
+static_assert(is_bind_object<MouseMoveBind>);
+static_assert(!is_bind_object<int>);
+
+using BindingType = std::variant<ToggleButtonBind, HoldButtonBind, MouseMoveBind>;
+struct Binding{
+    BindingType type;
+    std::string name{}, desc{};
+};
+auto derive_actions_from_input(InputState const& input, std::span<const Binding> bindings, std::vector<Action>& out_actions) -> void{
+    out_actions.clear();
+    // For each binding, we check if the predicate input state has occured,
+    // and if so, we push an action to the list.
+    for (const auto& binding: bindings){
+        auto action = std::visit(overloaded{
+            [&](is_bind_object auto const& bind) -> std::optional<Action>{
+                return bind(input);
+            },
+        },binding.type);
+
+        if (action){
+            out_actions.push_back(*action);
+        }else{
+            // no 
         }
     }
 }
-
-auto Engine::upload_heightmap(Heightmap const& heightmap) -> void{
-    i32 samples_per_meter = 1;
-    auto cpu_mesh = mesh_heightmap(
-        heightmap,
-        HeightMapMeshCreateInfo{
-            .num_x_samples = static_cast<u32>(samples_per_meter * heightmap.m_extentX),
-            .num_z_samples = static_cast<u32>(samples_per_meter * heightmap.m_extentZ),
+auto post_process_actions(std::vector<Action>& out_actions) -> void{
+    auto new_actions = std::vector<Action>{};
+    auto movement_delta_sum = glm::vec3{};
+    for (auto& action: out_actions){
+        if (action.type == ActionType::MoveCamera){
+            movement_delta_sum += action.delta3; 
+        }else{
+            new_actions.push_back(action);
         }
-    );
-    static constexpr MeshID mesh_id = 0;
+    }
+    if (movement_delta_sum != glm::vec3{0,0,0}){
+    // We sum, and then normalize the movement actions into a single one.
+    // This prevents diagonal movement from being faster than mono-direction movement,
+    // and also avoids sending actions when two opposing keys are pressed (the sum_delta will be zero)
+        new_actions.emplace_back(
+            ActionType::MoveCamera,
+            glm::vec2{0,0},
+            glm::normalize(movement_delta_sum)
+        );
+    }
+    out_actions = std::move(new_actions);
+}
 
-    auto model = glm::mat4x4(1.0f);
-    model = glm::translate(model,heightmap.m_world_center);
-    rend.upload_mesh3d(mesh_id, cpu_mesh, model);
+void Engine::loop(){
+    // lets carve out the high level commands.
+    auto dt_s = profiler.get_dt_seconds();
+    if (ui.wants_mouse()){
+        platform.uncapture_cursor();
+    }else{
+        platform.capture_cursor();
+    }
+    // TODO: consider merging the two functions, so that input state is just directly updated
+    auto events = poll_events(platform);        // Platform polls for events
+    update_input_states(                         // input is updated to reflect the events 
+        input_state, 
+        events, 
+        &(m_shouldExit), 
+        ui.wants_mouse(), 
+        ui.wants_keyboard()
+    );
+
+    std::vector<Binding> bindings{
+        Binding{ 
+            .type = HoldButtonBind{
+                .button = ButtonCode::KEY_W,
+                .action = {ActionType::MoveCamera},
+            }
+        }
+    };
+    derive_actions_from_input(input_state,bindings, actions);
+    post_process_actions(actions);
+    apply_actions_to_camera(actions, cam, dt_s);
+
+    // TODO: make the shit
+
+//    auto frame = begin_frame();
+//    draw_world(r3d,world);
+//    draw_ui(r2d,ui);
+}
+
+
+
+
+Engine::Engine()
+    : platform(initialWindowLogicalExtent)
+    , input_state()
+    , r3d(platform.get_window_handle(),initialWindowLogicalExtent,platform.m_pixelDensity)
+    , world()
+    , cam()
+    , ui(platform.get_window_handle())
+{
+    init_gui(ui, platform, r3d);
 }

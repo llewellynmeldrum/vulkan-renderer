@@ -5,13 +5,13 @@
 #include "renderer.hpp"
 #include "vulkan/vulkan.hpp"
 #include "renderer_init.hpp"
-void Renderer::handle_window_resize(glm::vec2 glm_windowLogicalExtent){
+void Renderer3D::update_window_extent(glm::vec2 glm_windowLogicalExtent){
     m_rendContext.windowLogicalExtent = glm_windowLogicalExtent; 
     m_rendContext.windowPixelExtent = logical_to_pixel(glm_windowLogicalExtent);
     recreate_swapchain();
 }
 
-void Renderer::recreate_swapchain() {
+void Renderer3D::recreate_swapchain() {
     using namespace std::chrono_literals;
     m_gpuContext.device.waitIdle();
     m_gpuContext.swapchain.descriptor.clear();
@@ -30,29 +30,29 @@ void Renderer::recreate_swapchain() {
     m_rendContext.requiresSwapchainRecreation = false;
 }
 
-void Renderer::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset) const{
+void Renderer3D::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset) const{
     auto cmdCopyBuf = begin_single_use_cmd();
     cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=offset, .dstOffset = 0, .size=size});
     end_single_use_cmd(std::move(cmdCopyBuf));
 }
 
-bool Renderer::is_initialized() { 
+bool Renderer3D::is_initialized() { 
     return m_rendContext.window != nullptr; 
 }
 
 [[nodiscard]]
-auto Renderer::get_current_frame_index()
+auto Renderer3D::get_current_frame_index()
 const -> u32{
     return m_rendContext.frameCount % k_syncFrameCount;
 }
 
 [[nodiscard]]
-vk::Extent2D Renderer::get_framebuffer_size() const noexcept{
+vk::Extent2D Renderer3D::get_framebuffer_size() const noexcept{
     int w{},h{};
     SDL_GetWindowSizeInPixels(m_rendContext.window, &w,&h);
     return vk::Extent2D{st_cast<u32>(w),st_cast<u32>(h)};
 }
-auto Renderer::toggle_wireframe()
+auto Renderer3D::toggle_wireframe()
 -> void{
     if (m_vkPolygonMode == vk::PolygonMode::eFill){
         m_vkPolygonMode = vk::PolygonMode::eLine;
@@ -61,7 +61,7 @@ auto Renderer::toggle_wireframe()
         m_vkPolygonMode = vk::PolygonMode::eFill;
     }
 }
-auto Renderer::get_viewport() const
+auto Renderer3D::get_viewport() const
 -> vk::Viewport{
     return {
         m_rendContext.viewportOffset.x, m_rendContext.viewportOffset.y,
@@ -69,7 +69,7 @@ auto Renderer::get_viewport() const
         k_depthMin, k_depthMax
     };
 }
-auto Renderer::get_scissor() const
+auto Renderer3D::get_scissor() const
 -> vk::Rect2D{
     return {
         {

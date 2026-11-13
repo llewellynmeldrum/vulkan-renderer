@@ -32,6 +32,14 @@ auto euclid_mod(T a, T b){
 #define NO_MOVE_CTOR(T )    T(T &&) = DELETE;
 #define NO_MOVE_ASSN(T )    T& operator=(T &&) = DELETE;
 
+#define COPY_CTOR(T, ...)    T(const T __VA_ARGS__ &)
+#define COPY_ASSN(T, ...)    T& operator=(const T __VA_ARGS__ &)
+#define MOVE_CTOR(T, ...)    T(T __VA_ARGS__ &&)
+#define MOVE_ASSN(T, ...)    T& operator=(T __VA_ARGS__ &&)
+
+#define DEFL_CTOR(T, ...)    T()
+#define DEFL_DTOR(T, ...)    ~T()
+
 
 // I dont know why this (or something similar) isnt a builtin keyword.
 // Forward declarations like 'struct foo;' are so easy to miss, and imo 
@@ -71,3 +79,5 @@ template <typename T>
 struct force_type_error;
 
 
+// Helper for std::visit stuff
+template<typename... Ts> struct overloaded : Ts... {using Ts::operator()...;};

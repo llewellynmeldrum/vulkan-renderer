@@ -16,8 +16,6 @@ struct FrameData {
     vk::raii::Buffer uniformBuffer{nullptr};
     vk::raii::DeviceMemory uniformBufferMemory{nullptr};
     void* uniformBufferMappedMemory{nullptr};
-
-
 };
 
 static_assert(std::is_aggregate_v<FrameData>);

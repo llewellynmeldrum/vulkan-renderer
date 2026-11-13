@@ -411,12 +411,6 @@ make_descriptor_set_layout(
                 .setDescriptorCount(1)
                 .setStageFlags(vk::ShaderStageFlagBits::eFragment)
         },
-        vk::DescriptorSetLayoutBinding{
-            vk::DescriptorSetLayoutBinding{}
-                .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-                .setDescriptorCount(1)
-                .setStageFlags(vk::ShaderStageFlagBits::eFragment)
-        },
     };
     for (auto i = 0uz; i<layoutBindings.size(); i++){
         layoutBindings[i].setBinding(i);
@@ -442,9 +436,6 @@ make_descriptor_pool(
         vk::DescriptorPoolSize{}
             .setType(vk::DescriptorType::eCombinedImageSampler)
             .setDescriptorCount(syncFrameCount),
-        vk::DescriptorPoolSize{}
-            .setType(vk::DescriptorType::eCombinedImageSampler)
-            .setDescriptorCount(syncFrameCount),
     };
     return vk::raii::DescriptorPool{
         m_vkDevice,
@@ -461,8 +452,7 @@ make_descriptor_sets(
     vk::raii::DescriptorPool const& m_vkDescriptorPool,
     vk::raii::DescriptorSetLayout const& m_vkDescriptorSetLayout,
     std::span<const FrameData> m_inflightFrames,
-    Texture2D const& tex_0,
-    Texture2D const& tex_1,
+    Texture2D const& texture,
     u32 syncFrameCount
 ) -> std::vector<vk::raii::DescriptorSet>
 {
@@ -489,8 +479,7 @@ make_descriptor_sets(
                 .setDescriptorType(vk::DescriptorType::eUniformBuffer)
                 .setBufferInfo(bufferInfo)
             ,
-            tex_0.get_write_descriptor_set( *res[frame_idx]),
-            tex_1.get_write_descriptor_set( *res[frame_idx])
+            texture.get_write_descriptor_set( *res[frame_idx]),
 
         };
         for (auto i = 0uz; i<descriptorWriteSets.size(); i++){

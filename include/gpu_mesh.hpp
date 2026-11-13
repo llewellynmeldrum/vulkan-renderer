@@ -6,14 +6,19 @@
 #include "vertex.hpp"
 #include "vertex_raw_data.hpp"
 #include "vk_managed_buffers.hpp"
-//#include "vk_traits.hpp")
 template<typename tVertexType, typename tIndexType=u32>
 struct GpuMesh{
     using IndexType = tIndexType;
     using VertexType = tVertexType;
-    GpuMesh() = default;
-    GpuMesh(const GpuMesh &) = delete;  GpuMesh &operator=(const GpuMesh &) = delete ;
-    GpuMesh(GpuMesh &&) = default;      GpuMesh &operator=(GpuMesh &&) = default;
+
+    DEFL_CTOR(GpuMesh) = default;
+    DEFL_DTOR(GpuMesh) = default;
+
+    MOVE_ASSN(GpuMesh) = default;
+    MOVE_CTOR(GpuMesh) = default;
+
+    COPY_ASSN(GpuMesh) = DELETE;
+    COPY_CTOR(GpuMesh) = DELETE;
 
     VmaAllocator m_allocator{nullptr};
     AllocatedBuffer m_indices{nullptr};

@@ -2,10 +2,7 @@
 #include "renderer.hpp"
 #include "vk_types.hpp"
 
-auto Renderer::upload_mesh2d() -> void {
-    m_rend2d.m_gpu_mesh = make_gpu_mesh(m_rend2d.m_cpu_mesh);
-}
-auto Renderer::upload_mesh3d(
+auto Renderer3D::upload_mesh3d(
     MeshID id,
     CpuMesh3D cpu_mesh,
     glm::mat4x4 model_matrix
@@ -25,7 +22,7 @@ auto Renderer::upload_mesh3d(
 }
 
 template<typename tVertexType, typename tIndexType>
-auto Renderer::make_gpu_mesh_impl(CpuMesh<tVertexType,tIndexType> const& cpu_mesh) -> GpuMesh<tVertexType,tIndexType>{
+auto Renderer3D::make_gpu_mesh_impl(CpuMesh<tVertexType,tIndexType> const& cpu_mesh) -> GpuMesh<tVertexType,tIndexType>{
     using GpuMeshType = GpuMesh<tVertexType,tIndexType>;
     using VertexType = tVertexType;
     using IndexType = tIndexType;
@@ -118,9 +115,9 @@ auto Renderer::make_gpu_mesh_impl(CpuMesh<tVertexType,tIndexType> const& cpu_mes
     stagingBuffer.clear();
     return mesh;
 }
-auto Renderer::make_gpu_mesh(CpuMesh2D const& cpu_mesh) -> GpuMesh2D {
+auto Renderer3D::make_gpu_mesh(CpuMesh2D const& cpu_mesh) -> GpuMesh2D {
     return make_gpu_mesh_impl(cpu_mesh);
 }
-auto Renderer::make_gpu_mesh(CpuMesh3D const& cpu_mesh) -> GpuMesh3D {
+auto Renderer3D::make_gpu_mesh(CpuMesh3D const& cpu_mesh) -> GpuMesh3D {
     return make_gpu_mesh_impl(cpu_mesh);
 }
