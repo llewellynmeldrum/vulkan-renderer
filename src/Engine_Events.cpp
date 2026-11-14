@@ -5,6 +5,15 @@
 #include "cppslop.hpp"
 #include "Engine_Events.hpp"
 
+// NOTE:: Input pipeline:
+// Subsytem     Inputs                                 Outputs
+// (Platform)   SDL_PollEvents()                     = std::vector<Events>
+//              std::vector<Events>                  = InputState
+//              InputState + std::vector<Binding>    = std::vector<Action>
+// Actions now can be handled by individual subsystems.
+
+// This generates Events (eg. ButtonPressEvents) by polling SDL for ITS events.
+// Another platform could plug in in their own implementation here.
 auto poll_events(Platform& platform) -> std::vector<Event>{
     auto e = SDL_Event{};
     auto events = std::vector<Event>{};
@@ -44,16 +53,14 @@ auto poll_events(Platform& platform) -> std::vector<Event>{
                 );
             } break;
             case SDL_EventType::SDL_EVENT_MOUSE_MOTION:{
-                ASSERT(e.button.button <= 3);
                 events.emplace_back(
                     std::in_place_type<MouseMoveEvent>,
                     glm::vec2{e.motion.x, e.motion.y}
                 );
             } break;
             case SDL_EventType::SDL_EVENT_MOUSE_WHEEL:{
-                ASSERT(e.button.button <= 3);
                 events.emplace_back(
-                    std::in_place_type<MouseMoveEvent>,
+                    std::in_place_type<ScrollWheelMoveEvent>,
                     glm::vec2{e.wheel.x, e.wheel.y}
                 );
             } break;
@@ -63,41 +70,41 @@ auto poll_events(Platform& platform) -> std::vector<Event>{
 }
 
 auto update_input_states(
-    InputState& input,
     std::span<Event const> events,
-    bool* shouldExit,
+    InputState& input,
     bool shouldIgnoreMouse,
     bool shouldIgnoreKeyboard
-) -> void{
+) -> InputState&{
     for (const auto& e: events){
         std::visit(overloaded{
             [&](PlatformQuitEvent const& ev){
-                *shouldExit = true;
+                input.platform_quit_requested = true;
             },
             [&](MouseMoveEvent const& ev){
                 if (shouldIgnoreMouse) return;
                 input.mouse_pos = ev.pos;
+                input.mouse_delta = ev.delta;
             }, 
             [&](ScrollWheelMoveEvent const& ev){
                 if (shouldIgnoreMouse) return;
-                input.mouse_wheel_relative = ev.diff;
+                input.scroll_wheel_delta = ev.delta;
             }, 
             [&](ButtonPressEvent const& ev){
-                if (is_mouse_button(ev) && shouldIgnoreMouse){
-                    return;
-                }else if (shouldIgnoreKeyboard){
-                    return;
+                if (is_mouse_button(ev)){
+                    if (shouldIgnoreMouse) return;
+                }else {
+                    if (shouldIgnoreKeyboard) return;
                 }
                 input.pressed.at(ev.code) = true;
             },
             [&](ButtonReleaseEvent const& ev){
-                if (is_mouse_button(ev) && shouldIgnoreMouse){
-                    return;
-                }else if (shouldIgnoreKeyboard){
-                    return;
-                }
+                // NOTE: Release events are never ignored.
+                // If they were, the ui grabbing control after a press event 
+                // will mean that future release events are dropped (if they used the same filtering 
+                // as ButtonPressEvent.)
                 input.pressed.at(ev.code) = false;
             },
         }, e);
     }
+    return input;
 }

@@ -2,7 +2,7 @@
 #include "Gui.hpp"
 #include "platform.hpp"
 #include "Engine_Gui.hpp"
-#include "renderer.hpp"
+#include "r3d.hpp"
 
 auto init_gui(Gui& ui, Platform& platform, Renderer3D& r3d) -> void{
     using detail::debug::get_c_handle;

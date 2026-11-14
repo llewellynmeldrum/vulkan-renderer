@@ -6,7 +6,7 @@
 #include "push_constants.hpp"
 #include "vertex_raw_data.hpp"
 #include "vk_managed_buffers.hpp"
-#include "renderer.hpp"
+#include "r3d.hpp"
 #include "vk_types.hpp"
 #include "vk_util.hpp"
 
@@ -177,20 +177,20 @@ auto Renderer3D::record_commands(
 
     }
 
-    auto transform2d = PushConstants::Transform2D{
-        // scale should take logical screen pos in and output ndc normalized.
-        // shader does: logical_pos * scale + translate
-        // To get -1,-1 TL and +1,+1 BR, and 0,0 center, we must :
-        // 1. multiply logical_pos by 2, and divide that by window extent.
-        //  -> this gives us 0,0 TL, 2,2 BR, 1,1 center.
-        .scale = glm::vec2( 2.0 ) / m_rendContext.windowLogicalExtent,
-
-        // 2. subtract 1 from all of these points and you get -1,-1 TL, 1,1 BR, 0,0 center.
-        .translate = glm::vec2(-1.0f)
-    };
-    m_2d_pipeline.push(cmdBuf,transform2d);
-    m_2d_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
-    draw_mesh(cmdBuf, m_rend2d.m_gpu_mesh);
+//    auto transform2d = PushConstants::Transform2D{
+//        // scale should take logical screen pos in and output ndc normalized.
+//        // shader does: logical_pos * scale + translate
+//        // To get -1,-1 TL and +1,+1 BR, and 0,0 center, we must :
+//        // 1. multiply logical_pos by 2, and divide that by window extent.
+//        //  -> this gives us 0,0 TL, 2,2 BR, 1,1 center.
+//        .scale = glm::vec2( 2.0 ) / m_rendContext.windowLogicalExtent,
+//
+//        // 2. subtract 1 from all of these points and you get -1,-1 TL, 1,1 BR, 0,0 center.
+//        .translate = glm::vec2(-1.0f)
+//    };
+//    m_2d_pipeline.push(cmdBuf,transform2d);
+//    m_2d_pipeline.prepare_pass(cmdBuf,frame_descriptorSets);
+    //draw_mesh(cmdBuf, m_rend2d.m_gpu_mesh);
 
     record_imgui_commands(cmdBuf);
     cmdBuf.endRendering();

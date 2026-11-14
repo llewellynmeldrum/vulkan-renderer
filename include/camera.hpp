@@ -45,7 +45,6 @@ struct Camera{
         pos += direction * scale * move_speed;
     }
     void rotate_pitch(f32 pitch_rel_01, f32 scale) {
-        pitch -= pitch_rel_01 * vfov; 
         pitch = glm::clamp(pitch - pitch_rel_01 * vfov * scale, -89.0f, 89.0f); 
     }
     void rotate_yaw(f32 yaw_rel_01, f32 scale) { 
@@ -55,10 +54,7 @@ struct Camera{
     void zoom_to(f32 amount){
         vfov = std::clamp(amount,vfov_min,vfov_max);
     }
-    void zoom_in(f32 multiplier){
-        vfov = std::clamp(vfov*multiplier*zoom_sens,vfov_min,vfov_max);
-    }
-    void zoom_out(f32 multiplier){
+    void zoom_by(f32 multiplier){
         vfov = std::clamp(vfov*multiplier*zoom_sens,vfov_min,vfov_max);
     }
 

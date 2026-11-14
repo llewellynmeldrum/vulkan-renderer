@@ -32,5 +32,5 @@ auto Gui::wants_mouse() -> bool {
     return ImGui::GetIO().WantCaptureMouse;
 }
 auto Gui::wants_keyboard() -> bool {
-    return ImGui::GetIO().WantCaptureMouse;
+    return ImGui::GetIO().WantCaptureKeyboard;
 }

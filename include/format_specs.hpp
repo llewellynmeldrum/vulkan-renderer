@@ -12,17 +12,17 @@ struct std::formatter<glm::vec<L,T,Q>>{
     constexpr auto parse(std::format_parse_context& ctx) {
         return ctx.begin();
     }
-    constexpr auto format(const glm::vec<L,T,Q>& obj, auto& ctx) const noexcept{
-        std::format_to(ctx.out(),"{}", "{{");
+    constexpr auto format(glm::vec<L,T,Q> const& obj, auto& ctx) const noexcept{
+        auto out = std::format_to(ctx.out(),"{}", "{{");
         auto first = true;
         for (const auto& v : std::span(glm::value_ptr(obj),L)){
             if (!first){
-                std::format_to(ctx.out(),", ");
+                out = std::format_to(out,", ");
             }
-            std::format_to(ctx.out(),"{}", v);
+            out = std::format_to(out,"{}", v);
             first = false;
         }
-        std::format_to(ctx.out(),"{}", "}}");
+        return std::format_to(out,"{}", "}}");
     }
 };
 

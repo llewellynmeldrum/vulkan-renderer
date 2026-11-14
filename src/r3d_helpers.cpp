@@ -2,7 +2,7 @@
 #include <thread>
 #include "SDL3/SDL_video.h"
 #include "glm_to_vk.hpp"
-#include "renderer.hpp"
+#include "r3d.hpp"
 #include "vulkan/vulkan.hpp"
 #include "renderer_init.hpp"
 void Renderer3D::update_window_extent(glm::vec2 glm_windowLogicalExtent){
@@ -30,7 +30,7 @@ void Renderer3D::recreate_swapchain() {
     m_rendContext.requiresSwapchainRecreation = false;
 }
 
-void Renderer3D::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset) const{
+void Renderer3D::copy_buffer(vk::Buffer const & src, vk::Buffer const& dst, vk::DeviceSize size,vk::DeviceSize offset){
     auto cmdCopyBuf = begin_single_use_cmd();
     cmdCopyBuf.copyBuffer(src,dst,vk::BufferCopy{.srcOffset=offset, .dstOffset = 0, .size=size});
     end_single_use_cmd(std::move(cmdCopyBuf));

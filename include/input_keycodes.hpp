@@ -437,7 +437,7 @@ enum struct ButtonCode: i32{
     NONE = 0,
     MB_1 = 1, // left click
     MB_2 = 2, // right click
-    MB_3 = 2, // scroll bar click
+    MB_3 = 3, // scroll bar click
     KEY_A = 4,
     KEY_B = 5,
     KEY_C = 6,

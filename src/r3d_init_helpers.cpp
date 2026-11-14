@@ -1,4 +1,4 @@
-#include "renderer.hpp"
+#include "r3d.hpp"
 auto Renderer3D::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) const -> void
 {
     cmdBuf.end();
@@ -9,11 +9,8 @@ auto Renderer3D::end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) const -> v
     m_gpuContext.queue.waitIdle();
 }
 
-auto 
-Renderer3D::begin_single_use_cmd() 
-const -> vk::raii::CommandBuffer
-{
-    auto cmdBuf =  std::move(vk::raii::CommandBuffers(
+auto Renderer3D::begin_single_use_cmd() -> vk::raii::CommandBuffer {
+    auto cmdBuf = std::move(vk::raii::CommandBuffers(
             m_gpuContext.device,
             vk::CommandBufferAllocateInfo{}
                 .setCommandPool(get_current_frame().commandPool)

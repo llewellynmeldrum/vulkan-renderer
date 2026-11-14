@@ -10,12 +10,13 @@
 #include "sdl3_types.hpp"
 #include "glm_types.hpp"
 
+#include "stable_type_name.hpp"
 #include "stb_image.hpp"
 #include "format_specs.hpp"
 #include "file_io.hpp"
 #include "timer.hpp"
 #include "vertex.hpp"
-#include "renderer.hpp"
+#include "r3d.hpp"
 #include "vk_image_data.hpp"
 #include "vertex_raw_data.hpp"
 
@@ -31,6 +32,7 @@
 #include "renderer_init.hpp"
 #include "renderer_types.hpp"
 
+#include "cppslop.hpp"
 
 Renderer3D::Renderer3D(SDL_Window* window, glm::vec2 window_extent, f32 pixel_density)
     : m_rendContext(
@@ -40,10 +42,9 @@ Renderer3D::Renderer3D(SDL_Window* window, glm::vec2 window_extent, f32 pixel_de
     )
     ,m_pixelDensity(pixel_density)
 {
-    LOG_INFO("INITIALIZING RENDERER ({})", static_cast<void*>(this));
+    LOG_DBG("Initializing {} ", stable_type_name<THIS_TYPE>());
     try{
         init_vulkan();
-        init_imgui();
     } catch(vk::SystemError const& e){
         LOG_FATAL("Failed to initialize vulkan, threw: {}", e.what());
     }
@@ -135,12 +136,12 @@ void Renderer3D::init_vulkan() {
         init_fill_pipeline(main_shaders_module);
         init_line_pipeline(main_shaders_module);
 
-        auto shaders2d_module = detail::helpers::make_shader_module(
-            m_gpuContext.device, 
-            "./shaders/bin/shaders2d.spv",
-            "shaders2d"
-        );
-        init_2d_pipeline(shaders2d_module);
+        //auto shaders2d_module = detail::helpers::make_shader_module(
+        //    m_gpuContext.device, 
+        //    "./shaders/bin/shaders2d.spv",
+        //    "shaders2d"
+        //);
+        //init_2d_pipeline(shaders2d_module);
 
         auto voxel_dda_module = detail::helpers::make_shader_module(
             m_gpuContext.device, 
@@ -309,33 +310,33 @@ auto Renderer3D::init_voxel_dda_pipeline(detail::helpers::ShaderModuleWrapper co
 }
 auto Renderer3D::init_2d_pipeline(detail::helpers::ShaderModuleWrapper const& shader) 
 -> void{
-    m_2d_pipeline = make_shader_pipeline<
-        Vertex2D, // vertex type 
-        PushConstants::Transform2D // push constant type
-    > (
-        PipelineCreateInfo {
-            .pipeline_name           = "2d",
-            .shader_module_name      = shader.module_name,
-            .shader_module           = shader.module,
-            .device                  = m_gpuContext.device,
-            .vertex_fn_name          = "vertMain",
-            .frag_fn_name            = "fragMain",
-            .enabled_dynamic_states  = vk_enabledDynamicState,
-            .descriptor_set_layout = m_gpuContext.descriptorSetLayout,
-            .poly_mode               = vk::PolygonMode::eFill,
-            .cull_mode               = vk::CullModeFlagBits::eNone,
-            .color_image_format      = m_gpuContext.swapchain.imageFormat,
-            .depth_image_format      = DepthAttachment::select_depth_format(),
-
-            .depth_write             = false,
-            .depth_test              = true,
-            // Normally, this would be lessOrEqual, but we have a flipped Z.
-            .depth_compar            = vk::CompareOp::eGreaterOrEqual,
-            .blend                   = detail::helpers::alpha_blend(),
-            .depth_bias              = false,
-        }
-    );
-
+//    m_2d_pipeline = make_shader_pipeline<
+//        Vertex2D, // vertex type 
+//        PushConstants::Transform2D // push constant type
+//    > (
+//        PipelineCreateInfo {
+//            .pipeline_name           = "2d",
+//            .shader_module_name      = shader.module_name,
+//            .shader_module           = shader.module,
+//            .device                  = m_gpuContext.device,
+//            .vertex_fn_name          = "vertMain",
+//            .frag_fn_name            = "fragMain",
+//            .enabled_dynamic_states  = vk_enabledDynamicState,
+//            .descriptor_set_layout = m_gpuContext.descriptorSetLayout,
+//            .poly_mode               = vk::PolygonMode::eFill,
+//            .cull_mode               = vk::CullModeFlagBits::eNone,
+//            .color_image_format      = m_gpuContext.swapchain.imageFormat,
+//            .depth_image_format      = DepthAttachment::select_depth_format(),
+//
+//            .depth_write             = false,
+//            .depth_test              = true,
+//            // Normally, this would be lessOrEqual, but we have a flipped Z.
+//            .depth_compar            = vk::CompareOp::eGreaterOrEqual,
+//            .blend                   = detail::helpers::alpha_blend(),
+//            .depth_bias              = false,
+//        }
+//    );
+//
 }
 
 void Renderer3D::init_fill_pipeline(detail::helpers::ShaderModuleWrapper const& shader) {

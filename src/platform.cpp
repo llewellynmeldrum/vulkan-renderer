@@ -1,8 +1,10 @@
 #include "platform.hpp"
+#include "stable_type_name.hpp"
 Platform::Platform(
     glm::vec2 desiredLogicalSize,
     std::string_view window_name
 ) {
+    LOG_DBG("Initializing {} ", stable_type_name<THIS_TYPE>());
     static constexpr auto init_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
     static constexpr auto window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE; 
     // Consider using 
@@ -67,12 +69,10 @@ auto Platform::get_window_extent() const -> glm::vec2 {
 }
 
 auto Platform::capture_cursor() -> void{
-    ASSERT(m_cursor_is_captured == false);
     SDL_SetWindowRelativeMouseMode(m_window, true);
     m_cursor_is_captured = true;
 }
 auto Platform::uncapture_cursor() -> void{
-    ASSERT(m_cursor_is_captured == true);
     SDL_SetWindowRelativeMouseMode(m_window, false);
     m_cursor_is_captured = false;
 }

@@ -82,7 +82,7 @@ struct Renderer3D {
 
     Pipeline<PushConstants::ModelMatrix>                m_fill_pipeline{};
     Pipeline<PushConstants::ModelMatrix>                m_line_pipeline{};
-    Pipeline<PushConstants::Transform2D>                m_2d_pipeline{};
+//    Pipeline<PushConstants::Transform2D>                m_2d_pipeline{};
     Pipeline<PushConstants::Transform2D>                m_voxel_dda_pipeline{};
 
     // MESH BULLSHIT (NOTE: this probably doesnt belong here)
@@ -168,13 +168,12 @@ struct Renderer3D {
         vk::Buffer const& dst,
         vk::DeviceSize size,
         vk::DeviceSize offset=0
-    ) const -> void;
+    ) -> void;
   private:
 
     auto recreate_swapchain() -> void;
 
     auto init_vulkan() -> void;
-    auto init_imgui() -> void;
     auto record_imgui_commands(vk::raii::CommandBuffer const& cmdBuf) -> void;
 
 
@@ -196,8 +195,7 @@ struct Renderer3D {
     ) -> void;
 
 
-    auto begin_single_use_cmd() 
-    const -> vk::raii::CommandBuffer;
+    auto begin_single_use_cmd() -> vk::raii::CommandBuffer;
 
     auto end_single_use_cmd(vk::raii::CommandBuffer&& cmdBuf) 
     const -> void;

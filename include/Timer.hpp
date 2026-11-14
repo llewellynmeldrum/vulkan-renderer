@@ -27,9 +27,9 @@ namespace timer{
         return impl_clock::now();
     }
 
-    static inline time_point prog_epoch_time;
-    static inline bool has_set_epoch{false};
-    inline void set_prog_epoch(){
+    inline time_point prog_epoch_time;
+    inline bool has_set_epoch{false};
+    inline void set_program_epoch(){
         ASSERT(!has_set_epoch);
         has_set_epoch = true;
         prog_epoch_time = timer::now();
@@ -82,6 +82,10 @@ namespace timer{
     [[nodiscard]]
     inline Repr_t to_milliseconds(duration dur){
         return from_duration<millis_period>(dur);
+    }
+    [[nodiscard]]
+    inline Repr_t to_seconds(duration dur){
+        return from_duration<s_period>(dur);
     }
 
 }

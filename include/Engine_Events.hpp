@@ -4,8 +4,8 @@
 #include "input_keycodes.hpp"
 #include "platform.hpp"
 struct PlatformQuitEvent    {};
-struct MouseMoveEvent       { glm::vec2 pos; };
-struct ScrollWheelMoveEvent { glm::vec2 diff; };
+struct MouseMoveEvent       { glm::vec2 pos, delta;};
+struct ScrollWheelMoveEvent { glm::vec2 delta; };
 struct ButtonPressEvent     { ButtonCode code; };
 struct ButtonReleaseEvent   { ButtonCode code; };
 
@@ -26,11 +26,11 @@ using Event = std::variant<
     ButtonReleaseEvent
 >;
 
+// Process events, updates the input state
 auto update_input_states(
-    InputState& input,
     std::span<Event const> events,
-    bool* shouldExit,
+    InputState& input,
     bool shouldIgnoreMouse,
     bool shouldIgnoreKeyboard
-) -> void;
+) -> InputState&;
 auto poll_events(Platform& platform) -> std::vector<Event>;

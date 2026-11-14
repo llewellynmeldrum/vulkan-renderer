@@ -10,6 +10,7 @@
 #include "sdl3_types.hpp"
 
 struct Platform{
+    // Creates window 
     Platform(
         glm::vec2 desiredLogicalSize,
         std::string_view window_name ="Test window"sv

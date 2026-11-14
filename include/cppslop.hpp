@@ -15,6 +15,8 @@ auto euclid_mod(T a, T b){
 
 // SECTION: macros -------------------------------------------------------------
 
+#define THIS_TYPE std::remove_pointer_t<decltype(this)>
+
 // SUBSECTION: keyword reassignments and language stuff
 // delete is so easy to miss, and I often read it as 'default'. This helps distinguish them
 #define DELETE delete

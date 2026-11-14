@@ -32,21 +32,21 @@ public:
             pressed_previous.at(code) = pressed.at(code);
         }
         mouse_pos_previous = mouse_pos;
-        mouse_pos={};
 
-        mouse_wheel_relative={};
+        mouse_delta={};
+        scroll_wheel_delta={};
     }
 
     auto mouse_moved() const -> bool{
         return mouse_pos != mouse_pos_previous;
     }
     auto scroll_wheel_moved()const  -> bool{
-        return mouse_wheel_relative != glm::vec2{0,0};
+        return scroll_wheel_delta != glm::vec2{0,0};
     }
+    bool platform_quit_requested{};
     glm::vec2 mouse_pos{};
+    glm::vec2 mouse_delta{};
     glm::vec2 mouse_pos_previous{};
-    auto mouse_movement_rel() const -> glm::vec2{
-        return mouse_pos - mouse_pos_previous;
-    }
-    glm::vec2 mouse_wheel_relative{};
+
+    glm::vec2 scroll_wheel_delta{};
 };

@@ -1,3 +1,4 @@
+#include <cpptrace/basic.hpp>
 #include <sstream>
 #include <string>
 
@@ -5,6 +6,7 @@
 #include <libassert/platform.hpp>
 
 #include "vk_debug.hpp"
+#include "debug.hpp"
 #include "style.hpp"
 #include "primitive_types.hpp"
 
@@ -68,33 +70,9 @@ vk_debug_callback(
     vk::DebugUtilsMessengerCallbackDataEXT const* data,
     [[maybe_unused]] void* user_ptr
 ) {
-    auto custom_formatter = cpptrace::formatter{}
-        .colors(cpptrace::formatter::color_mode::always)    // Force ANSI colors
-        .paths(cpptrace::formatter::path_mode::basename)    // Print "main.cpp" instead of full path
-        .addresses(cpptrace::formatter::address_mode::none) // Object file address instead of raw
-        .snippets(false);                                    // Include source code snippets
-    using Sev = vk::DebugUtilsMessageSeverityFlagBitsEXT;
-    auto const kind = vk::to_string(types);
-    if (severity >= Sev::eError) {
-        std::ostringstream out{};
-        auto trace = cpptrace::generate_trace();
-        for (auto idx = 0uz; idx< trace.frames.size(); idx++){
-            auto const& frame = trace.frames.at(idx);
-            bool has_dbg_symbols = frame.line.has_value();
-            if (has_dbg_symbols){
-                out << custom_formatter.format(frame) << "\n";
-            }else{
-                auto omitted_streak = 0uz;
-                while (idx < trace.frames.size() && !trace.frames.at(idx).line.has_value()){
-                    omitted_streak++;
-                    idx++;
-                }
-                out << std::format("Omitted {} frames (no dbg_symbols)\n",omitted_streak);
-            }
-        }
+    if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eError) {
         std::cerr << std::format("VULKAN ERROR! {} ", format_vk_error(data));
-        std::cerr << out.str();
-        LIBASSERT_BREAKPOINT();
+        dbg::exit();
     }
     return vk::False;
 }

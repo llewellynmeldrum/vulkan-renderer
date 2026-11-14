@@ -3,14 +3,14 @@
 	#error "This header is intended for c++ only."
 #endif // __cplusplus
 
-#include "SDL3/SDL_vulkan.h"
-#include "SDL3/SDL_video.h"
+#include <SDL3/SDL_vulkan.h>
+#include <SDL3/SDL_video.h>
 #include "Texture2D.hpp"
-#include "vk_managed_buffers.hpp"
 #include "renderer_buffer_helpers.hpp"
+#include "renderer_init_helpers.hpp"
+#include "vk_managed_buffers.hpp"
 #include "vk_frame_data.hpp"
 #include "vk_types.hpp"
-#include "renderer_init_helpers.hpp"
 #include "vk_debug.hpp"
 #include "vk_swapchain.hpp"
 
@@ -21,7 +21,8 @@ struct InstanceContext{
     vk::raii::Instance m_vkInstance{nullptr};
     vk::raii::DebugUtilsMessengerEXT m_vkDebugMessenger {nullptr};
 };
-[[nodiscard]] inline auto make_vk_instance(
+[[nodiscard]]
+inline auto make_vk_instance(
     bool m_useValidationLayers,
     vk::raii::Context const& m_vkContext,
     u32 API_VER,
@@ -197,10 +198,15 @@ make_vk_device_and_queue(
     }
 
     if (!*ctx.m_vkPhysicalDevice){
-        LOG_FATAL("Unable to select a physical device! Driver listed {}, none matched",//
-                  m_vkInstance.enumeratePhysicalDevices().size());
+        LOG_FATAL(
+            "Unable to select a physical device! Driver listed {}, none matched", 
+            m_vkInstance.enumeratePhysicalDevices().size()
+        );
     }else{
-        LOG_INFO("Device created, PD selected: {}", get_physical_dev_name(ctx.m_vkPhysicalDevice));
+        LOG_INFO(
+            "Device created, PD selected: {}",
+            get_physical_dev_name(ctx.m_vkPhysicalDevice)
+        );
     }
 
     ctx.m_vkQueue = ctx.m_vkDevice.getQueue(ctx.m_vkQueueFamily, 0);
